@@ -5,12 +5,14 @@ from datetime import datetime, timezone
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import brier_score_loss, log_loss
 
-GAMMA_BASE = "https://gamma.polymarket.com"   # Gamma REST
+GAMMA_BASE = "https://gamma-api.polymarket.com"   # Gamma REST
 CLOB_BASE  = "https://clob.polymarket.com"    # CLOB REST (public market data)
+
+
 
 # 1) Discover markets (Gamma)
 def fetch_markets():
-    r = requests.get(f"{GAMMA_BASE}/markets?limit=1000")
+    r = requests.get(f"{GAMMA_BASE}/markets?limit=10")
     r.raise_for_status()
     m = pd.json_normalize(r.json().get("data", []))
     # keep binary, tradable, not resolved
