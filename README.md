@@ -59,5 +59,3 @@ The empirical work combines live-market data with counterfactual simulation:
 
 ---
 
-## Repository Structure
-
