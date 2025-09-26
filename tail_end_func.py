@@ -4,21 +4,21 @@ import requests, pandas as pd, numpy as np
 from dateutil import parser as dtp
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
-import time
+import time, json
+import matplotlib.dates as mdates
+from datetime import *
+from config import *
+from utils import *
 
-
-DATA_API = "https://data-api.polymarket.com"
-# Example: conditionId from your payload (replace with yours)
-MARKET_ID = "0x91dbde104fee004a34f638f9a49d7fb8d4e8bc75e213aab92cd853cbbc4c9c90"
-
-def get_title(market_id: str) -> str:
+def fetch_market(market_id: str) -> pd.Series:
     r = requests.get(
-                f"{DATA_API}/trades",
+                f"{GAMMA_API}/markets/{market_id}",
                 params={"market": market_id, "limit": 1},
             )  
     r.raise_for_status()
     j = r.json()
-    return j[0]['title'] if j else "Unknown Market"
+    j["clobTokenIds"] = json.loads(j["clobTokenIds"])
+    return j
 
 def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataFrame:
     """Public, no-auth trade history across both outcomes for a market."""
@@ -58,6 +58,28 @@ def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataF
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df = df.sort_values("ts").reset_index(drop=True)
     return df[["ts", "price", "outcome", "side", "size"]]
+
+def fetch_market_prices_history(market_id: str, token_index: int, interval: str, fidelity: int) -> pd.DataFrame:
+    """Fetches historical market prices from Polymarket Data API."""
+    market = fetch_market(market_id)
+    token_id = market["clobTokenIds"][token_index]
+    if not market or "error" in market:
+        raise RuntimeError(f"Market {market_id} not found or error: {market.get('error','unknown')}")
+    url = f"{CLOB_API}/prices-history"
+    all_rows = []
+    r = requests.get(
+        url,
+        params={"market": token_id, 
+                "interval": interval,
+                "fidelity": fidelity,},
+    )
+    r.raise_for_status()
+    all_rows = r.json()['history']
+    if not all_rows:
+        return pd.DataFrame()
+    df = pd.json_normalize(all_rows)
+    df = df.sort_values("t").reset_index(drop=True)
+    return df
 
 def make_line(trades: pd.DataFrame, freq: str = "1min") -> pd.DataFrame:
     """
@@ -105,17 +127,38 @@ def plot_market(trades: pd.DataFrame):
     plt.xlabel("Index")
     plt.ylim(0,1)
     plt.grid(True, axis="y", linestyle="--", alpha=0.6)
-    plt.title(get_title(MARKET_ID))
+    plt.title(fetch_market(TEST_MARKET_ID)['title'])
     plt.yticks(np.arange(0, 1.05, 0.05)) 
     plt.gca().yaxis.set_major_formatter(PercentFormatter(xmax=1))
     plt.legend()
     plt.tight_layout()
     plt.show()   
 
+
+def plot_market_history(prices: pd.DataFrame):
+    x_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
+
+    plt.figure(figsize=(11,5))
+    plt.plot(x_utc, prices['p'], label="price", color="blue")
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%M%d', tz=timezone.utc))
+    plt.gcf().autofmt_xdate()
+    plt.ylabel("probability")
+    plt.xlabel("time")
+    plt.ylim(0,1)
+    plt.grid(True, axis="y", linestyle="--", alpha=0.6)
+    plt.title(fetch_market(TEST_MARKET_ID)['question'])
+    plt.yticks(np.arange(0, 1.05, 0.05)) 
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(xmax=1))
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
     
 if __name__ == "__main__":
-    trades = fetch_trades(MARKET_ID, cicle=True, end=200000)
-    print(f"Fetched {len(trades)} trades")
-    line   = make_line(trades, freq="1min")      # this is the “blue line”
-    line_t = identify_tailend_market(line, low=0.10, high=0.90)
-    plot_market(trades)
+    market = fetch_market(TEST_MARKET_ID)
+    prices = fetch_market_prices_history(TEST_MARKET_ID, YES_INDEX, "max", 30)
+    plot_market_history(prices)
+    #trades = fetch_trades(MARKET_ID, cicle=True, end=200000)
+    #print(f"Fetched {len(trades)} trades")
+    #line   = make_line(trades, freq="1min")      # this is the “blue line”
+    #line_t = identify_tailend_market(line, low=0.10, high=0.90)
+    #plot_market(trades)
