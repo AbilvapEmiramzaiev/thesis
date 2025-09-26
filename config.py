@@ -1,0 +1,10 @@
+YES_INDEX = 0
+NO_INDEX  = 1
+TOKEN_NAMES = ["YES","NO"]
+DATA_API = "https://data-api.polymarket.com"
+TEST_MARKET_ID = "563398"
+CLOB_API  = "https://clob.polymarket.com"
+GAMMA_API = "https://gamma-api.polymarket.com"
+UNIX_STANDARD = 's'
+CLOB_MAX_INTERVAL='max'
+CLOB_FIDELITY_TIME='m'
