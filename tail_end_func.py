@@ -12,6 +12,34 @@ from utils import *
 from typing import Iterable, Dict, Tuple, List
 
 
+def fetch_markets(size: int = 0, offset: int = 500) -> pd.DataFrame:
+    """Fetch multiple markets from Polymarket Gamma API, returns DataFrame.
+    If size=0, fetch all markets. If size>0, fetch only the requested size."""
+    url = f"{GAMMA_API}/markets"
+    all_markets = []
+    offset = offset
+    page_size = 500
+    while True:
+        r = requests.get(url, params={"limit": page_size, "offset": offset})
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            break
+        for market in data:
+            if "clobTokenIds" in market:
+                market["clobTokenIds"] = json.loads(market["clobTokenIds"])
+            else:
+                market["clobTokenIds"] = None
+            all_markets.append(market)
+        if len(data) < page_size:
+            break
+        offset += page_size
+        if size > 0 and len(all_markets) >= size:
+            all_markets = all_markets[:size]
+            break
+    return pd.DataFrame(all_markets)
+
+
 def fetch_market(market_id: str) -> pd.Series:
     r = requests.get(
                 f"{GAMMA_API}/markets/{market_id}",
@@ -140,6 +168,9 @@ def plot_market(trades: pd.DataFrame):
     plt.tight_layout()
     plt.show()   
 
+def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
+    return fetch_market_prices_history(market_id, YES_INDEX, "max", 30)
+    
 
 def plot_market_history(prices: pd.DataFrame):
     x_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
