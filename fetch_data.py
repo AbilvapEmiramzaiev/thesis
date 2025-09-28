@@ -8,34 +8,6 @@ from sklearn.metrics import brier_score_loss, log_loss
 GAMMA_BASE = "https://gamma-api.polymarket.com"   # Gamma REST
 CLOB_BASE  = "https://clob.polymarket.com"    # CLOB REST (public market data)
 
-
-
-# 1) Discover markets (Gamma)
-def fetch_markets():
-    r = requests.get(f"{GAMMA_BASE}/markets?limit=10")
-    r.raise_for_status()
-    m = pd.json_normalize(r.json().get("data", []))
-    # keep binary, tradable, not resolved
-    m = m[(m["outcomeCount"]==2) & (m["status"]=="active")]
-    # mid prob from last quoted YES price
-    m["p_yes"] = m["bestBidYes"].fillna(0)*0 + m["lastPriceYes"]  # adapt to actual fields returned
-    # tails
-    m_tails = m[(m["p_yes"]<=0.10) | (m["p_yes"]>=0.90)].copy()
-    return m_tails[["id","question","p_yes","endDate","liquidity","volume"]]
-
-# 2) Pull order book + trades (CLOB)
-def fetch_trades(market_id, since_iso=None):
-    # Replace with actual endpoint paths; Polymarket provides trade/ fills endpoints in CLOB docs/clients
-    r = requests.get(f"{CLOB_BASE}/trades?market={market_id}&limit=10000")
-    r.raise_for_status()
-    t = pd.json_normalize(r.json().get("data", []))
-    # expected columns: ts, side (buy/sell YES), price, size
-    t["ts"] = pd.to_datetime(t["ts"], utc=True)
-    t = t.sort_values("ts")
-    # midprice proxy from YES: m = price_yes ; implied NO = 1 - m (ignoring fees)
-    t["mid_yes"] = t["price"]  # if side-specific, reconstruct from both sides / best quotes
-    return t
-
 # 3) Build per-second bars & microstructure features
 def to_second_bars(trades_df):
     trades_df["sec"] = trades_df["ts"].dt.floor("S")
