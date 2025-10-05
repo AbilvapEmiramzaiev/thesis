@@ -2,7 +2,7 @@ import pandas as pd
 from tail_end_func import *
 
 if __name__ == "__main__":
-	markets = fetch_markets(500, 25800)
+	markets = fetch_markets(500)
 	print(f"Fetched {len(markets)} markets.")
 
 	df_labeled = pd.DataFrame()
