@@ -88,10 +88,12 @@ def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataF
     df = df.sort_values("ts").reset_index(drop=True)
     return df[["ts", "price", "outcome", "side", "size"]]
 
-def fetch_market_prices_history(market_id: str, token_index: int, interval: str, fidelity: int) -> pd.DataFrame:
+def fetch_market_prices_history(market_id: str, token_index: int, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
     """Fetches historical market prices from Polymarket Data API."""
     market = fetch_market(market_id)
     token_id = market["clobTokenIds"][token_index]
+    startTs = startTs if startTs else gamma_ts_to_utc(market['createdAt'])
+    print(startTs, market['createdAt'])
     if market is None or market.empty or ("error" in market.index):
         raise RuntimeError(f"Market {market_id} not found or error: {market.get('error','unknown')}")
     url = f"{CLOB_API}/prices-history"
@@ -99,7 +101,7 @@ def fetch_market_prices_history(market_id: str, token_index: int, interval: str,
     r = requests.get(
         url,
         params={"market": token_id, 
-                "interval": interval,
+                "startTs": startTs,
                 "fidelity": fidelity,},
     )
     r.raise_for_status()
@@ -169,7 +171,7 @@ def plot_market(trades: pd.DataFrame):
     plt.show()   
 
 def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
-    return fetch_market_prices_history(market_id, YES_INDEX, "max", 30)
+    return fetch_market_prices_history(market_id, YES_INDEX)
     
 
 def plot_market_history(prices: pd.DataFrame):
@@ -192,7 +194,8 @@ def plot_market_history(prices: pd.DataFrame):
     
 if __name__ == "__main__":
     market = fetch_market(TEST_TAILEND_MARKET_ID)
-    prices = fetch_market_prices_history(market['id'], YES_INDEX, "max", 30)
+    prices = fetch_market_prices_history(market['id'], YES_INDEX)
+    #print(prices.head())
     prices['market_id'] = market['id']
     market = add_market_bucket(market, prices); 
     print(market, type(market)) 
