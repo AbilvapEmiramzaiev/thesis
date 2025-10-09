@@ -49,3 +49,5 @@ GAMMA_API = "https://gamma-api.polymarket.com"
 UNIX_STANDARD = 's'
 CLOB_MAX_INTERVAL='max'
 CLOB_FIDELITY_TIME='m'
+GAMMA_API_DEAD_MARKETS_OFFSET=1997
+CSV_OUTPUT_PATH = "data/market_prices.csv"
