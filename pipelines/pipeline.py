@@ -1,14 +1,6 @@
 """Utilities for collecting Gamma market prices and plotting from cached CSVs."""
 
-from __future__ import annotations
-
-import argparse
-import sys
-from pathlib import Path
-from typing import Iterable, List, Optional
-
-import matplotlib.pyplot as plt
-import pandas as pd
+from imports import *
 
 from fetch.tail_end_func import (
     YES_INDEX,
@@ -56,33 +48,6 @@ def save_prices_to_csv(prices: pd.DataFrame, output_path: Path) -> None:
     prices.to_csv(output_path, index=False)
 
 
-def plot_market_from_csv(
-    csv_path: Path,
-    market_id: str,
-    *,
-    show: bool = True,
-    ax: Optional[plt.Axes] = None,
-) -> plt.Axes:
-    """Plot a single market's price path using cached CSV data."""
-    df = pd.read_csv(csv_path)
-    subset = df[df["market_id"] == str(market_id)].copy()
-    if subset.empty:
-        raise ValueError(f"No rows for market {market_id} in {csv_path}")
-
-    subset["ts"] = pd.to_datetime(subset["t"], unit="s", utc=True)
-    ax = ax or plt.gca()
-    ax.plot(subset["ts"], subset["p"], label=str(market_id))
-    ax.set_ylabel("probability")
-    ax.set_xlabel("time")
-    ax.set_ylim(0, 1)
-    ax.grid(True, axis="y", linestyle="--", alpha=0.6)
-    ax.legend()
-    if show and ax.figure:
-        ax.figure.autofmt_xdate()
-        plt.show()
-    return ax
-
-
 def _parse_market_ids(raw: Optional[List[str]]) -> Optional[List[str]]:
     if not raw:
         return None
@@ -94,7 +59,7 @@ def _parse_market_ids(raw: Optional[List[str]]) -> Optional[List[str]]:
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect Gamma market prices and cache them to CSV.")
-    parser.add_argument("--output", type=Path, default=Path("data/market_prices.csv"), help="CSV path for cached prices")
+    parser.add_argument("--output", type=Path, default=Path("../" + CSV_OUTPUT_PATH), help="CSV path for cached prices")
     parser.add_argument("--markets", nargs="*", help="Explicit market ids (comma separated allowed)")
     parser.add_argument("--limit", type=int, default=100, help="Number of markets to fetch when ids not supplied")
     parser.add_argument("--offset", type=int, default=0, help="Initial offset for pagination")
@@ -122,9 +87,6 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     save_prices_to_csv(prices, args.output)
     print(f"Wrote {len(prices)} rows to {args.output}")
-
-    if args.plot_market:
-        plot_market_from_csv(args.output, args.plot_market)
 
     return 0
 

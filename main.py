@@ -1,4 +1,4 @@
-import fetch_data as fd
+import fetch.fetch_data as fd
 
 
 if __name__ == "__main__":
