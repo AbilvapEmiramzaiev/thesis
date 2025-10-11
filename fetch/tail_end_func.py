@@ -1,91 +1,78 @@
 # pip install requests pandas numpy python-dateutil matplotlib pyarrow
-from __future__ import annotations
-import requests, pandas as pd, numpy as np
-from dateutil import parser as dtp
-import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
-import time, json
-import matplotlib.dates as mdates
-from datetime import *
-from config import *
-from utils import *
-from typing import Iterable, Dict, Tuple, List, Optional, Any
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from imports import *
 
 
-def _derive_event_keys(market: Any) -> Tuple[List[str], Optional[str]]:
-    """Return list of event identifiers (slugs or titles) and the primary key."""
-    getter = market.get if hasattr(market, "get") else lambda k, default=None: market[k] if k in market else default
-
-    event_keys: List[str] = []
-    raw_events = getter("events", None)
-    if isinstance(raw_events, list):
-        for event in raw_events:
-            if isinstance(event, dict):
-                for candidate in (event.get("slug"), event.get("id")):
-                    if candidate:
-                        event_keys.append(str(candidate))
-                        break
-
-    group_title = getter("groupItemTitle", None)
-    if group_title:
-        event_keys.append(str(group_title))
-
-    # Remove duplicates while preserving order
-    seen = set()
-    normalized: List[str] = []
-    for key in event_keys:
-        if key not in seen:
-            seen.add(key)
-            normalized.append(key)
-
-    primary_key = normalized[0] if normalized else None
-    return normalized, primary_key
-
-
-def fetch_markets(size: int = 0, offset: int = GAMMA_API_DEAD_MARKETS_OFFSET) -> pd.DataFrame:
+def fetch_markets(
+    size: int = 0,
+    offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
+    api_filters: Optional[Dict[str, Any]] = None,
+    post_filters: Optional[List[Callable[[Dict[str, Any]], bool]]] = None,
+) -> pd.DataFrame:
     """Fetch multiple markets from Polymarket Gamma API, returns DataFrame.
-    If size=0, fetch all markets. If size>0, fetch only the requested size."""
+    - `api_filters`: dict of query params to add to the API call.
+    - `post_filters`: list of functions `market -> bool` to filter the result after fetching."""
+
     url = f"{GAMMA_API}/markets"
     all_markets = []
     offset = offset
     page_size = 500
+
+    api_filters = api_filters or {}
+    post_filters = post_filters or []
+
     while True:
-        r = requests.get(url, params={"limit": page_size, "offset": offset})
+        params: Dict[str, Any] = {"limit": page_size, "offset": offset}
+        # merge in API-level filters
+        params.update(api_filters)
+
+        r = requests.get(url, params=params)
         r.raise_for_status()
         data = r.json()
         if not data:
             break
-        for market in data:
-            if "clobTokenIds" in market:
-                market["clobTokenIds"] = json.loads(market["clobTokenIds"])
-            else:
-                market["clobTokenIds"] = None
 
-            event_keys, primary_key = _derive_event_keys(market)
-            market["event_keys"] = event_keys
-            market["primary_event_key"] = primary_key
-            all_markets.append(market)
+        for market in data:
+            all_markets.append(parse_market(market))
+
         if len(data) < page_size:
             break
+
         offset += page_size
         if size > 0 and len(all_markets) >= size:
             all_markets = all_markets[:size]
             break
+
+    # now apply post-filters
+    if post_filters:
+        filtered = []
+        for m in all_markets:
+            keep = True
+            for fn in post_filters:
+                if not fn(m):
+                    keep = False
+                    break
+            if keep:
+                filtered.append(m)
+        all_markets = filtered
+
     return pd.DataFrame(all_markets)
 
 
 def fetch_market(market_id: str) -> pd.Series:
     r = requests.get(
-                f"{GAMMA_API}/markets/{market_id}",
-                params={"market": market_id, "limit": 1},
+                f"{GAMMA_API}/markets",
+                params={"id": market_id, "limit": 1},
             )  
     r.raise_for_status()
     j = r.json()
-    j["clobTokenIds"] = json.loads(j["clobTokenIds"])
-    event_keys, primary_key = _derive_event_keys(j)
-    j["event_keys"] = event_keys
-    j["primary_event_key"] = primary_key
-    return pd.Series(j)
+    return parse_market(j[0])
+
 
 
 def compute_event_market_counts(markets: pd.DataFrame) -> pd.Series:
@@ -124,21 +111,18 @@ def add_event_uniqueness_flags(markets: pd.DataFrame) -> pd.DataFrame:
 
 def is_single_market_event(
     market: pd.Series,
-    markets: Optional[pd.DataFrame] = None
 ) -> bool:
     """True when no other Gamma market shares the same event key(s)."""
-    event_keys = market.get("event_keys")
-    if not event_keys:
+    eventId = market['eventId']
+    if not eventId:
         return False
 
-    if markets is None:
-        markets = fetch_markets()
-
-    counts = compute_event_market_counts(markets)
-    if counts.empty:
-        return False
-
-    return max(counts.get(key, 0) for key in event_keys) == 1
+    r = requests.get(
+                f"{GAMMA_API}/events/{eventId}"
+            )  
+    r.raise_for_status()
+    j = r.json()
+    return len(j['markets']) == 1
 
 def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataFrame:
     """Public, no-auth trade history across both outcomes for a market."""
@@ -506,53 +490,22 @@ def add_market_bucket(
     df["market_bucket"] = label
     return df
 
-def plot_market(trades: pd.DataFrame):
-    yes_line = trades[trades["outcome"] == "Yes"]
-    no_line  = trades[trades["outcome"] == "No"]
-    plt.figure(figsize=(11,5))
-    plt.plot(yes_line.index, yes_line["price"], label="YES", color="blue")
-    plt.plot(no_line.index, no_line["price"],  label="NO",  color="red")
-    plt.ylabel("probability")
-    plt.xlabel("Index")
-    plt.ylim(0,1)
-    plt.grid(True, axis="y", linestyle="--", alpha=0.6)
-    plt.title(fetch_market(TEST_MARKET_ID)['title'])
-    plt.yticks(np.arange(0, 1.05, 0.05)) 
-    plt.gca().yaxis.set_major_formatter(PercentFormatter(xmax=1))
-    plt.legend()
-    plt.tight_layout()
-    plt.show()   
-
 def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
     return fetch_market_prices_history(market_id, YES_INDEX)
     
 
-def plot_market_history(prices: pd.DataFrame):
-    x_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
-
-    plt.figure(figsize=(11,5))
-    plt.plot(x_utc, prices['p'], label="price", color="blue")
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%M%d', tz=timezone.utc))
-    plt.gcf().autofmt_xdate()
-    plt.ylabel("probability")
-    plt.xlabel("time")
-    plt.ylim(0,1)
-    plt.grid(True, axis="y", linestyle="--", alpha=0.6)
-    plt.title(fetch_market(TEST_MARKET_ID)['question'])
-    plt.yticks(np.arange(0, 1.05, 0.05)) 
-    plt.gca().yaxis.set_major_formatter(PercentFormatter(xmax=1))
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
 if __name__ == "__main__":
-    market = fetch_market(TEST_TAILEND_MARKET_ID)
+    market = fetch_market(223889)
+    save_to_csv(market.to_frame().T, Path('data/test_market.csv'))
+    print(market)
+    print(is_single_market_event(market))
+    print(identify_market_outcome_winner_index(market))
     prices = fetch_market_prices_history(market['id'], YES_INDEX)
-    #print(prices.head())
-    prices['market_id'] = market['id']
     print(prices.head())
-    market = add_market_bucket(market, prices); 
-    print(market, type(market)) 
+    #prices['market_id'] = market['id']
+    #print(prices.head())
+    #market = add_market_bucket(market, prices); 
+    #print(market, type(market)) 
     #plot_market_history(prices)
     #trades = fetch_trades(MARKET_ID, cicle=True, end=200000)
     #print(f"Fetched {len(trades)} trades")
