@@ -13,9 +13,10 @@ def collect_market_prices(
     market_ids: Optional[List[str]] = None,
     *,
     limit: int = 100,
-    offset: int = 0,
+    offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
     token_index: int = YES_INDEX,
     fidelity: int = 1440,
+    output_path: Optional[Path] = None,
 ) -> pd.DataFrame:
     """Fetch price history for markets and return a long DataFrame."""
     if market_ids is None or len(market_ids) == 0:
@@ -23,6 +24,11 @@ def collect_market_prices(
         if markets.empty:
             return pd.DataFrame()
         market_ids = [str(market_id) for market_id in markets["id"].tolist()]
+
+    output_path = Path(output_path) if output_path else None
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    header_written = bool(output_path and output_path.exists() and output_path.stat().st_size > 0)
 
     records: List[pd.DataFrame] = []
     for market_id in market_ids:
@@ -35,6 +41,12 @@ def collect_market_prices(
             continue
         df = prices[["t", "p"]].copy()
         df["market_id"] = str(market_id)
+        df = df[["market_id", "t", "p"]]
+        if output_path:
+            df.to_csv(output_path, mode="a", header=not header_written, index=False)
+            print(f"Appended {len(df)} rows for market {market_id} to {output_path}")
+            header_written = True
+
         records.append(df)
 
     if not records:
@@ -59,10 +71,10 @@ def _parse_market_ids(raw: Optional[List[str]]) -> Optional[List[str]]:
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect Gamma market prices and cache them to CSV.")
-    parser.add_argument("--output", type=Path, default=Path("../" + CSV_OUTPUT_PATH), help="CSV path for cached prices")
+    parser.add_argument("--output", type=Path, default=Path(CSV_OUTPUT_PATH), help="CSV path for cached prices")
     parser.add_argument("--markets", nargs="*", help="Explicit market ids (comma separated allowed)")
     parser.add_argument("--limit", type=int, default=100, help="Number of markets to fetch when ids not supplied")
-    parser.add_argument("--offset", type=int, default=0, help="Initial offset for pagination")
+    parser.add_argument("--offset", type=int, default=GAMMA_API_DEAD_MARKETS_OFFSET, help="Initial offset for pagination")
     parser.add_argument("--fidelity", type=int, default=1440, help="Fidelity passed to prices-history endpoint")
     parser.add_argument("--token-index", type=int, default=YES_INDEX, help="Outcome index to download prices for")
     parser.add_argument("--plot-market", help="Optional market id to plot after collection")
@@ -79,14 +91,14 @@ def main(argv: Iterable[str] | None = None) -> int:
         offset=args.offset,
         token_index=args.token_index,
         fidelity=args.fidelity,
+        output_path=args.output,
     )
 
     if prices.empty:
         print("No price data collected.")
         return 0
 
-    save_prices_to_csv(prices, args.output)
-    print(f"Wrote {len(prices)} rows to {args.output}")
+    print(f"Appended {len(prices)} rows to {args.output}")
 
     return 0
 
