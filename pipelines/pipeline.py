@@ -64,26 +64,75 @@ def save_prices_to_csv(prices: pd.DataFrame, output_path: Path) -> None:
     prices.to_csv(output_path, index=False)
 
 
-def _parse_market_ids(raw: Optional[List[str]]) -> Optional[List[str]]:
-    if not raw:
-        return None
-    ids: List[str] = []
-    for item in raw:
-        ids.extend(part.strip() for part in item.split(",") if part.strip())
-    return ids or None
+
 def stream_markets_to_csv(
-    limit: int = 100,
+    limit: int|Literal['all'] = 100,
+    page_size: int = 500,
     offset: int = GAMMA_API_OLD_MARKETS_OFFSET,
+    out_path:Path = Path(f"data/test_pipeline.csv")
+
 ) -> None:
-    single_market_events = fetch_markets(size=limit, offset=offset, post_filters={"is_single_market_event": True})
-    save_to_csv(single_market_events, Path(f"data/markets.csv"))
+    header_written = out_path.exists() and out_path.stat().st_size > 0
+    saved = 0
+    offset = offset
+    while True:
+        batch = fetch_markets(
+            size=page_size,
+            page=page_size,
+            offset=offset,
+            post_filters={"is_single_market_event": True}
+        )
+
+        if batch is None:
+            print(f"API empty answer. Last offset = {offset}")
+            break
+
+        # if total is an int, cap the last batch
+        if isinstance(limit, int):
+            remaining = limit - saved
+            if remaining <= 0:
+                break
+            if len(batch) > remaining:
+                batch = batch.iloc[:remaining]
+
+        # append
+        if(len(batch)>0):
+            batch.to_csv(
+                out_path,
+                mode="a",
+                header=not header_written,
+                index=False,
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            header_written = True
+
+        saved += len(batch)
+        offset += page_size                        
+        print(f"Saved batch {len(batch)} (total saved={saved}), next offset={offset}")
+
+        if isinstance(limit, int) and saved >= limit:
+            break
+
+    print(f"Done. Wrote {saved} rows → {out_path}")
+
+def parse_limit(s: str) -> Union[int, Literal["all"]]:
+    s = s.strip().lower()
+    if s == "all":
+        return "all"
+    return int(s)
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect Gamma market prices and cache them to CSV.")
     parser.add_argument("--output", type=Path, default=Path(CSV_OUTPUT_PATH), help="CSV path for cached prices")
-    parser.add_argument("--stream-markets", dest="stream_markets", action="store_true", help="Fetch markets to csv")
-    parser.add_argument("--limit", type=int, default=1000, help="Number of markets to fetch when ids not supplied")
-    parser.add_argument("--offset", type=int, default=GAMMA_API_OLD_MARKETS_OFFSET, help="Initial offset for pagination")
+    parser.add_argument("--fetch-markets", dest="fetch_markets", action="store_true", help="Fetch markets to csv")
+    parser.add_argument(
+        "--limit",
+        type=parse_limit,        
+        default="all",             
+        help='Number of markets to fetch (or "all")',
+    )
+    parser.add_argument("--page-size", dest="page_size", type=int, default=500, help="Page size for each markets fetch")
+    parser.add_argument("--offset", type=int, default=GAMMA_API_LAST_PIPELINE_OFFSET, help="Initial offset for pagination")
     parser.add_argument("--fidelity", type=int, default=1440, help="Fidelity passed to prices-history endpoint")
     parser.add_argument("--token-index", type=int, default=YES_INDEX, help="Outcome index to download prices for")
     parser.add_argument("--plot-market", help="Optional market id to plot after collection")
@@ -92,9 +141,8 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-
-    if(args.stream_markets):
-        stream_markets_to_csv(limit=args.limit, offset=args.offset)
+    if(True):
+        stream_markets_to_csv(limit=args.limit, page_size=args.page_size, offset=args.offset)
         return 0
 
     prices = collect_market_prices(

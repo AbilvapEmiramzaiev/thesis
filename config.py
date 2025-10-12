@@ -1,5 +1,8 @@
 from enum import Enum
-
+from pathlib import Path
+import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 class MarketBucket(Enum):
     # High-side buckets (pick the tightest/highest satisfied)
     ALWAYS_HIGH_90 = (0,  ">=90%")
@@ -37,7 +40,27 @@ LOW_TO_ENUM = {
     0.01: MarketBucket.ALWAYS_LOW_1,
 }
 
+def make_session() -> requests.Session:
+    s = requests.Session()
+    retry = Retry(
+        total=5,                  # total retries
+        connect=5, read=5,
+        backoff_factor=0.5,       # 0.5, 1.0, 2.0, 4.0 ...
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],  # retry only safe methods
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=100, pool_maxsize=100)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    s.headers.update({"User-Agent": "thesis-fetcher/1.0"})
+    return s
+
+SESSION = make_session()
+DEFAULT_TIMEOUT = (3.05, 15)
+
 # Constants
+PROJECT_ROOT = Path(__file__).resolve().parent
 YES_INDEX = 0
 NO_INDEX  = 1
 TOKEN_NAMES = ["YES","NO"]
@@ -51,4 +74,5 @@ CLOB_MAX_INTERVAL='max'
 CLOB_FIDELITY_TIME='m'
 GAMMA_API_DEAD_MARKETS_OFFSET=1997
 GAMMA_API_OLD_MARKETS_OFFSET=4750
+GAMMA_API_LAST_PIPELINE_OFFSET=37250
 CSV_OUTPUT_PATH = "data/market_prices.csv"

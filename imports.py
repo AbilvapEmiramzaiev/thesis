@@ -12,5 +12,8 @@ import matplotlib.dates as mdates
 from datetime import *
 from config import *
 from utils import *
-from typing import Iterable, Dict, Tuple, List, Optional, Any, Callable, Mapping
+from typing import Iterable, Literal,Union, Dict, Tuple, List, Optional, Any, Callable, Mapping
 from fetch.filtering import *
+import csv
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
