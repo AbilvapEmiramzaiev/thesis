@@ -38,7 +38,11 @@ def fetch_markets(
             break
 
         for market in data:
-            all_markets.append(parse_market(market))
+            if(market.get('clobTokenIds') is None):
+                print(f"Skipping market {market.get('id')} with no clobTokenIds")
+                continue
+            parsed = parse_market(market)
+            all_markets.append(parsed)
 
         if len(data) < page_size:
             break
@@ -54,6 +58,8 @@ def fetch_markets(
         for m in all_markets:
             keep = True
             for fn in post_filters:
+                if isinstance(fn, str):
+                    fn = globals().get(fn)
                 if not fn(m):
                     keep = False
                     break
@@ -90,25 +96,6 @@ def compute_event_market_counts(markets: pd.DataFrame) -> pd.Series:
 
     return exploded.groupby("event_keys")["id"].nunique()
 
-
-def add_event_uniqueness_flags(markets: pd.DataFrame) -> pd.DataFrame:
-    """Annotate markets with event-level counts and a single-market flag."""
-    counts = compute_event_market_counts(markets)
-    counts_dict = counts.to_dict()
-
-    def _max_count(keys: Any) -> Optional[int]:
-        if isinstance(keys, list) and keys:
-            return max(counts_dict.get(key, 0) for key in keys)
-        return None
-
-    annotated = markets.copy()
-    annotated["event_market_count"] = annotated["event_keys"].apply(_max_count)
-    annotated["is_single_event_market"] = annotated["event_market_count"].apply(
-        lambda cnt: bool(cnt == 1) if cnt is not None else False
-    )
-    return annotated
-
-
 def is_single_market_event(
     market: pd.Series,
 ) -> bool:
@@ -122,6 +109,7 @@ def is_single_market_event(
             )  
     r.raise_for_status()
     j = r.json()
+    print(f'Marke {market['id']} is { "single-event" if len(j['markets']) == 1 else "multi-event"} market')
     return len(j['markets']) == 1
 
 def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataFrame:
@@ -166,7 +154,7 @@ def fetch_market_prices_history(market_id: str, token_index: int, fidelity: int 
     """Fetches historical market prices from Polymarket Data API. 1440 = daily"""
     market = fetch_market(market_id)
     token_id = market["clobTokenIds"][token_index]
-    startTs = startTs if startTs else gamma_ts_to_utc(market['createdAt'])
+    startTs = startTs if startTs else gamma_ts_to_utc(market['startDate'])
     if market is None or market.empty or ("error" in market.index):
         raise RuntimeError(f"Market {market_id} not found or error: {market.get('error','unknown')}")
     url = f"{CLOB_API}/prices-history"
@@ -495,13 +483,13 @@ def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
     
 
 if __name__ == "__main__":
-    market = fetch_market(223889)
-    save_to_csv(market.to_frame().T, Path('data/test_market.csv'))
-    print(market)
-    print(is_single_market_event(market))
-    print(identify_market_outcome_winner_index(market))
+    market = fetch_markets(3)
+    #save_to_csv(market.to_frame().T, Path('data/market.csv'))
+    print(market.head(), type(market))
+    print(is_single_market_event(market[0]))
+    """print(identify_market_outcome_winner_index(market))
     prices = fetch_market_prices_history(market['id'], YES_INDEX)
-    print(prices.head())
+    print(prices.head()) """
     #prices['market_id'] = market['id']
     #print(prices.head())
     #market = add_market_bucket(market, prices); 
