@@ -1,0 +1,5 @@
+fetch prices to csv
+fetch pricees for new format (no yes_index or return an array of clobtokensids or decide with if)
+plot prices
+filter for tailended by different timeframes
+select tail ended markets in same timeframe and display their price movements
