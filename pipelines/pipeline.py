@@ -7,16 +7,10 @@ if __package__ in (None, ""):
 
 from imports import *
 
-from fetch.tail_end_func import (
-    YES_INDEX,
-    fetch_market_prices_history,
-    fetch_markets,
-)
+from fetch.tail_end_func import *
 
 
 def collect_market_prices(
-    market_ids: Optional[Iterable[str] | Mapping[str, Any]] = None,
-    *,
     limit: int = 100,
     offset: int = GAMMA_API_OLD_MARKETS_OFFSET,
     token_index: int = YES_INDEX,
@@ -28,13 +22,12 @@ def collect_market_prices(
     Args:
         market_ids: Iterable of ids or dict mapping id -> market payload to bypass discovery.
     """
-    if market_ids is None:
-        markets = fetch_markets(size=limit, offset=offset)
-        if markets.empty:
-            return pd.DataFrame()
-        market_ids = {
-            str(idx): record for idx, record in markets.set_index("id").to_dict(orient="index").items()
-        }
+    markets = fetch_markets(size=limit, offset=offset)
+    if markets.empty:
+        return pd.DataFrame()
+    market_ids = {
+        str(idx): record for idx, record in markets.set_index("id").to_dict(orient="index").items()
+    }
     output_path = Path(output_path) if output_path else None
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,13 +71,18 @@ def _parse_market_ids(raw: Optional[List[str]]) -> Optional[List[str]]:
     for item in raw:
         ids.extend(part.strip() for part in item.split(",") if part.strip())
     return ids or None
-
+def stream_markets_to_csv(
+    limit: int = 100,
+    offset: int = GAMMA_API_OLD_MARKETS_OFFSET,
+) -> None:
+    single_market_events = fetch_markets(size=limit, offset=offset, post_filters={"is_single_market_event": True})
+    save_to_csv(single_market_events, Path(f"data/markets.csv"))
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect Gamma market prices and cache them to CSV.")
     parser.add_argument("--output", type=Path, default=Path(CSV_OUTPUT_PATH), help="CSV path for cached prices")
-    parser.add_argument("--markets", nargs="*", help="Explicit market ids (comma separated allowed)")
-    parser.add_argument("--limit", type=int, default=100, help="Number of markets to fetch when ids not supplied")
+    parser.add_argument("--stream-markets", dest="stream_markets", action="store_true", help="Fetch markets to csv")
+    parser.add_argument("--limit", type=int, default=1000, help="Number of markets to fetch when ids not supplied")
     parser.add_argument("--offset", type=int, default=GAMMA_API_OLD_MARKETS_OFFSET, help="Initial offset for pagination")
     parser.add_argument("--fidelity", type=int, default=1440, help="Fidelity passed to prices-history endpoint")
     parser.add_argument("--token-index", type=int, default=YES_INDEX, help="Outcome index to download prices for")
@@ -94,10 +92,12 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    market_ids = _parse_market_ids(args.markets)
+
+    if(args.stream_markets):
+        stream_markets_to_csv(limit=args.limit, offset=args.offset)
+        return 0
 
     prices = collect_market_prices(
-        market_ids,
         limit=args.limit,
         offset=args.offset,
         token_index=args.token_index,
