@@ -10,10 +10,11 @@ from imports import *
 
 def fetch_markets(
     size: int = 0,
+    page: int = 500,
     offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
     api_filters: Optional[Dict[str, Any]] = None,
     post_filters: Optional[List[Callable[[Dict[str, Any]], bool]]] = None,
-) -> pd.DataFrame:
+) -> pd.DataFrame|None:
     """Fetch multiple markets from Polymarket Gamma API, returns DataFrame.
     - `api_filters`: dict of query params to add to the API call.
     - `post_filters`: list of functions `market -> bool` to filter the result after fetching."""
@@ -21,7 +22,7 @@ def fetch_markets(
     url = f"{GAMMA_API}/markets"
     all_markets = []
     offset = offset
-    page_size = 500
+    page_size = page
 
     api_filters = api_filters or {}
     post_filters = post_filters or []
@@ -31,11 +32,11 @@ def fetch_markets(
         # merge in API-level filters
         params.update(api_filters)
 
-        r = requests.get(url, params=params)
+        r = SESSION.get(url, params=params, timeout=DEFAULT_TIMEOUT)
         r.raise_for_status()
         data = r.json()
-        if not data:
-            break
+        if data is None or len(data) == 0:
+            return None
 
         for market in data:
             if(market.get('clobTokenIds') is None):
@@ -66,7 +67,7 @@ def fetch_markets(
             if keep:
                 filtered.append(m)
         all_markets = filtered
-
+    print(f"Fetched {len(all_markets)} markets from offset {offset}")
     return pd.DataFrame(all_markets)
 
 
@@ -483,10 +484,13 @@ def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
     
 
 if __name__ == "__main__":
-    market = fetch_markets(3)
+    markets = pd.read_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    #print(markets['question'])
+    markets.apply(lambda row: is_single_market_event(row), axis=1)
+    #market = fetch_markets(3)
     #save_to_csv(market.to_frame().T, Path('data/market.csv'))
-    print(market.head(), type(market))
-    print(is_single_market_event(market[0]))
+    #print(market.head(), type(market))
+    #print(is_single_market_event(market[0]))
     """print(identify_market_outcome_winner_index(market))
     prices = fetch_market_prices_history(market['id'], YES_INDEX)
     print(prices.head()) """

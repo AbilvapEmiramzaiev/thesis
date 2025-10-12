@@ -12,7 +12,7 @@ def gamma_ts_to_utc(gammaTs: str) -> int:
 
 def save_to_csv(data: pd.DataFrame, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Market {data['id']} saved to {output_path}")
+    print(f"Markets {len(data)} saved to {output_path}")
     data.to_csv(output_path, index=False)
 
 def parse_market(j: dict) -> pd.Series:
