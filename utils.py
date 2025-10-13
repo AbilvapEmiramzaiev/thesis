@@ -51,3 +51,21 @@ def to_float(x):
             return round(float(x), 2)
         except (TypeError, ValueError):
             return None
+        
+def normalize_time(markets: pd.DataFrame) -> pd.DataFrame:
+    #make ISO-8601 YYYY-MM-DDTHH:MM:SSZ format
+    TIME_COLS = ["endDate", "startDate", "closedTime"]
+    
+    def to_iso_z(s):
+        if pd.isna(s):
+            return ""
+        # приводим к секундам (без миллисекунд). Убери .floor(...) если нужны мс
+        s = s.floor("s")
+        return s.strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    for c in TIME_COLS:
+        if c in markets.columns:
+            markets[c] = pd.to_datetime(markets[c], utc=True, errors="coerce")
+            markets[c] = markets[c].apply(to_iso_z)
+    return markets
+    

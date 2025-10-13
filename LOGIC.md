@@ -1,0 +1,1 @@
+pipeline fetches markets from gamma api, it normalizes more or less data to same format from api startDate, endDate, closedTime, createdAt, closedAt programm stores only first 3, takes from market or from event or from last 2 
