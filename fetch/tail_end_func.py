@@ -151,9 +151,8 @@ def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataF
     df = df.sort_values("ts").reset_index(drop=True)
     return df[["ts", "price", "outcome", "side", "size"]]
 
-def fetch_market_prices_history(market_id: str, token_index: int, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
+def fetch_market_prices_history(market: pd.Series, token_index: int, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
     """Fetches historical market prices from Polymarket Data API. 1440 = daily"""
-    market = fetch_market(market_id)
     token_id = market["clobTokenIds"][token_index]
     startTs = startTs if startTs else gamma_ts_to_utc(market['startDate'])
     if market is None or market.empty or ("error" in market.index):

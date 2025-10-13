@@ -141,7 +141,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    if(True):
+    if(args.fetch_markets):
         stream_markets_to_csv(limit=args.limit, page_size=args.page_size, offset=args.offset)
         return 0
 
