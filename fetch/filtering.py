@@ -1,5 +1,8 @@
 import json
 from typing import Optional
+import pandas as pd
+from datetime import datetime
+
 
 def identify_market_outcome_winner_index(market: json) -> Optional[str]:
     """Identify the winning outcome of a market using the clobid field."""
@@ -17,3 +20,30 @@ def identify_market_outcome_winner_index(market: json) -> Optional[str]:
             # Check if p is “close enough” to 1.0
             if abs(p - 1.0) <= tol:
                 return i
+def filter_by_timeframe(markets: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
+    s = pd.to_datetime(markets["startDate"], utc=True, errors="coerce")
+    e = pd.to_datetime(markets["endDate"],   utc=True, errors="coerce")
+    
+    lower = start_ts - pd.Timedelta(days=5)
+    upper = start_ts + pd.Timedelta(days=5)
+    lowerE = end_ts - pd.Timedelta(days=5)
+    upperE = end_ts + pd.Timedelta(days=5)
+    mask = (s.between(lower, upper, inclusive="both")) & (e.between(lowerE, upperE, inclusive="both"))
+    return markets.loc[mask].copy()
+
+def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) -> pd.DataFrame:
+    markets = df.copy()
+    t_resolve =  pd.to_datetime(markets["closedTime"], utc=True, errors="coerce")\
+        .fillna(pd.to_datetime(markets["endDate"], utc=True, errors="coerce"))
+    
+    duration = t_resolve - markets["startDate"]
+    threshold = pd.Timedelta(days=min_days)
+    if max_days is not None:
+        tmax = pd.Timedelta(days=max_days)
+        mask = (duration >= threshold) & (duration <= tmax)
+    else:
+        mask = (duration >= threshold)
+    markets["t_resolve"] = t_resolve
+    markets["duration_days"] = duration.dt.days
+
+    return markets[mask]
