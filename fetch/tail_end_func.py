@@ -484,8 +484,10 @@ def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
 
 if __name__ == "__main__":
     markets = pd.read_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    normalized = normalize_time(markets)
+    normalized.to_csv(Path('data/normalized.csv'), index=False) 
     #print(markets['question'])
-    markets.apply(lambda row: is_single_market_event(row), axis=1)
+    #markets.apply(lambda row: is_single_market_event(row), axis=1)
     #market = fetch_markets(3)
     #save_to_csv(market.to_frame().T, Path('data/market.csv'))
     #print(market.head(), type(market))
