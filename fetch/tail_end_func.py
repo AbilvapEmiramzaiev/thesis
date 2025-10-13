@@ -483,12 +483,18 @@ def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
     
 
 if __name__ == "__main__":
-    markets = pd.read_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
-    normalized = normalize_time(markets)
-    normalized.to_csv(Path('data/normalized.csv'), index=False) 
-    #print(markets['question'])
-    #markets.apply(lambda row: is_single_market_event(row), axis=1)
-    #market = fetch_markets(3)
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    start = pd.Timestamp('2025-03-01T00:00:00Z')
+    end = pd.Timestamp('2025-04-01T23:59:59Z')
+    #df = markets.copy()
+    #nostart = markets['startDate'].isna()
+    #print(len(df[nostart]), 'markets with no startDate')
+    #markets[nostart].to_csv(Path('data/nostart.csv'), index=False)
+    #print(filter_by_timeframe(markets, start, end))
+    for min in range(0,100,5):
+        print(f'Amount of markets with duration {min}-{min+5} days is {len(filter_by_duration(markets, min, min+5))}')
+    #normalized = normalize_time(markets)
+    #normalized.to_csv(Path('data/test_pipeline.csv'), index=False) 
     #save_to_csv(market.to_frame().T, Path('data/market.csv'))
     #print(market.head(), type(market))
     #print(is_single_market_event(market[0]))

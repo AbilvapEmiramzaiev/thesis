@@ -30,7 +30,7 @@ def parse_market(j: dict) -> pd.Series:
         j["prob_no"] = to_float(j["outcomePrices"][NO_INDEX])
     j['eventId'] = j['events'][0]['id'] if j.get('events') and isinstance(j['events'], list) and len(j['events']) > 0 else None
 
-    j["startDate"] = j.get("startDate") or j["events"][0].get       ("startDate") or j["events"][0].get("createAt")
+    j["startDate"] = j.get("startDate") or j["events"][0].get("startDate") or j["events"][0].get("createAt")
     j['clobTokenIdYes'] = j['clobTokenIds'][YES_INDEX]
     j['clobTokenIdNo'] = j['clobTokenIds'][NO_INDEX]
     # Keep a subset of relevant research fields
@@ -54,7 +54,6 @@ def to_float(x):
         
 def normalize_time(markets: pd.DataFrame) -> pd.DataFrame:
     #make ISO-8601 YYYY-MM-DDTHH:MM:SSZ format
-    TIME_COLS = ["endDate", "startDate", "closedTime"]
     
     def to_iso_z(s):
         if pd.isna(s):
@@ -69,3 +68,8 @@ def normalize_time(markets: pd.DataFrame) -> pd.DataFrame:
             markets[c] = markets[c].apply(to_iso_z)
     return markets
     
+
+def read_markets_csv(path: Path) -> pd.DataFrame:
+    utc_conv = lambda s: pd.to_datetime(s, utc=True, errors="coerce")
+    converters = {c: utc_conv for c in TIME_COLS}
+    return pd.read_csv(path, converters=converters)
