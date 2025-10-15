@@ -39,16 +39,18 @@ def closer_to_one(yes: float, no: float) -> float:
     else:
         return None
 
-def filter_by_timeframe(markets: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
+def filter_by_timeframe(markets: pd.DataFrame, start_ts: pd.Timestamp = None, end_ts: pd.Timestamp = None) -> pd.DataFrame:
     s = pd.to_datetime(markets["startDate"], utc=True, errors="coerce")
     e = pd.to_datetime(markets["endDate"],   utc=True, errors="coerce")
-    
-    lower = start_ts - pd.Timedelta(days=5)
-    upper = start_ts + pd.Timedelta(days=5)
-    lowerE = end_ts - pd.Timedelta(days=5)
-    upperE = end_ts + pd.Timedelta(days=5)
-    mask = (s.between(lower, upper, inclusive="both")) & (e.between(lowerE, upperE, inclusive="both"))
+    mask = pd.Series(True, index=markets.index)
+    if start_ts:
+        mask &= s.between(start_ts - pd.Timedelta(days=5), start_ts + pd.Timedelta(days=5), inclusive="both")
+    if end_ts:
+        mask &= e.between(end_ts - pd.Timedelta(days=5), end_ts + pd.Timedelta(days=5), inclusive="both")
     return markets.loc[mask].copy()
+
+    #mask = (s.between(lower, upper, inclusive="both")) & (e.between(lowerE, upperE, inclusive="both"))
+    #return markets.loc[mask].copy()
 
 def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) -> pd.DataFrame:
     markets = df.copy()
