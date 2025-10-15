@@ -257,14 +257,15 @@ def find_tailend_markets(markets: pd.DataFrame,
     return pd.DataFrame(tailend_markets)
 
 if __name__ == "__main__":
+
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
-    modermarkets = markets[markets['startDate'] > pd.Timestamp('2025-01-01T00:00:00Z')]
-
+    #modermarkets = markets[markets['startDate'] > pd.Timestamp('2025-01-01T00:00:00Z')]
+    modermarkets = markets.copy()
     print(len(modermarkets), 'markets starting after 2025-03-01')
-    longest = filter_by_duration(modermarkets, 70)
-    print(len(longest), 'markets with duration > 70 days')
-    tailended = find_tailend_markets(longest, prices, 0.90, 0.60)
+    filtered = filter_by_timeframe(modermarkets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
+    print(len(filtered), 'markets with duration > 70 days')
+    tailended = find_tailend_markets(filtered, prices, 0.90, 0.60)
     print(len(tailended), 'tailend markets found')
     print(len(prices))
     prices['market_id'] = prices['market_id'].astype(int)
@@ -273,6 +274,41 @@ if __name__ == "__main__":
     print(len(tailenedPrices), 'price points for tailend markets')
     print(tailenedPrices['t'].min(), 'to', tailenedPrices['t'].max())
     plot_prices(tailenedPrices)
+
+    tmp = markets.copy()
+    tmp['end_dt'] = pd.to_datetime(tmp['endDate'], utc=True, errors='coerce').dt.normalize()
+    tmp = tmp.dropna(subset=['end_dt'])
+    tmp['day_of_month'] = tmp['end_dt'].dt.day
+    tmp['ym'] = tmp['end_dt'].dt.to_period('M')
+
+    # 1) Overall most common exact end *date* (YYYY-MM-DD)
+    overall_exact_counts = tmp['end_dt'].value_counts()
+    overall_top_exact_date = overall_exact_counts.index[0]
+    overall_top_exact_count = overall_exact_counts.iloc[0]
+
+    # 2) Overall most common *day-of-month* (e.g., 1st, 15th, …)
+    dom_counts = tmp['day_of_month'].value_counts().sort_index()
+    overall_top_dom = dom_counts.idxmax()
+    overall_top_dom_count = dom_counts.max()
+
+    print("Most common exact end date:", overall_top_exact_date.date(), "count:", overall_top_exact_count)
+    print("Most common day-of-month:", overall_top_dom, "count:", overall_top_dom_count)
+
+    # 3) For each month, the most popular *day-of-month* (your “each month → 1 date”)
+    per_month_top = (
+        tmp.groupby(['ym', 'day_of_month'])
+        .size()
+        .rename('n')
+        .reset_index()
+        .sort_values(['ym', 'n'], ascending=[True, False])
+        .groupby('ym', as_index=False)
+        .first()
+        .rename(columns={'day_of_month': 'popular_day_of_month', 'n': 'count'})
+    )
+    print(per_month_top.head(10))
+
+   #longest = filter_by_duration(modermarkets, 60, 70)
+    
     #no_pricers = pd.read_csv(f'{PROJECT_ROOT}/data/no_price_markets.csv', names=['id'])
     #markets = markets[~markets['id'].isin(no_pricers['id'])]
     #find_tailend_markets(markets, prices, 0.90, 0.60)
