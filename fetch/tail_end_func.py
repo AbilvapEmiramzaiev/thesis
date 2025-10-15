@@ -6,7 +6,7 @@ if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from imports import *
-
+from plot.plot_data import plot_prices
 
 def fetch_markets(
     size: int = 0,
@@ -172,14 +172,6 @@ def fetch_market_prices_history(startDate: str, clobTokenId: str, fidelity: int 
     return df
 
 
-def _coerce_timestamp(value: Any) -> Optional[pd.Timestamp]:
-    if value is None:
-        return None
-    if isinstance(value, pd.Timestamp):
-        return value.tz_convert("UTC") if value.tzinfo else value.tz_localize("UTC")
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        return pd.to_datetime(value, unit='s', utc=True, errors="coerce")
-    return pd.to_datetime(value, utc=True, errors="coerce")
 
 
 def _prepare_price_series(
@@ -205,238 +197,9 @@ def _prepare_price_series(
     return df
 
 
-def _build_time_segments(
-    prices: pd.DataFrame,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> pd.DataFrame:
-    """Piecewise-constant segments with durations (seconds) for each price spell."""
-    prepared = _prepare_price_series(prices, price_col=price_col, ts_col=ts_col)
-    if prepared.empty:
-        return pd.DataFrame(columns=["start", "end", "duration_s", price_col])
-
-    start_ts = _coerce_timestamp(window_start) or prepared["_ts"].iloc[0]
-    end_ts = _coerce_timestamp(window_end) or prepared["_ts"].iloc[-1]
-
-    if start_ts >= end_ts:
-        return pd.DataFrame(columns=["start", "end", "duration_s", price_col])
-
-    prior = prepared[prepared["_ts"] <= start_ts]
-    if prior.empty:
-        current_price = float(prepared.loc[0, price_col])
-    else:
-        current_price = float(prior.iloc[-1][price_col])
-
-    time_points = [start_ts]
-    segment_prices: List[float] = []
-
-    for _, row in prepared.iterrows():
-        ts = row["_ts"]
-        price = float(row[price_col])
-        if ts <= start_ts:
-            current_price = price
-            continue
-        if ts >= end_ts:
-            break
-        time_points.append(ts)
-        segment_prices.append(current_price)
-        current_price = price
-
-    time_points.append(end_ts)
-    segment_prices.append(current_price)
-
-    segments = pd.DataFrame({
-        "start": time_points[:-1],
-        "end": time_points[1:],
-        "duration_s": [
-            (t_end - t_start).total_seconds()
-            for t_start, t_end in zip(time_points[:-1], time_points[1:])
-        ],
-        price_col: segment_prices,
-    })
-
-    segments = segments[segments["duration_s"] > 0].reset_index(drop=True)
-    return segments
-
-
-def is_tailend_market(market_prices: pd.DataFrame, low=0.10, high=0.90) -> bool:
+def is_strictly_tailend_market(market_prices: pd.DataFrame, low=0.10, high=0.90) -> bool:
     """A market is tail-end if either outcome is ever below `low` or above `high`."""
     return (market_prices['price'].le(low).any() or market_prices['price'].ge(high).any())
-
-
-def _extract_market_timestamp(market: Any, *keys: str) -> Optional[pd.Timestamp]:
-    getter = market.get if hasattr(market, "get") else lambda k, default=None: market[k] if k in market else default
-    for key in keys:
-        candidate = getter(key, None)
-        ts = _coerce_timestamp(candidate)
-        if ts is not None and not pd.isna(ts):
-            return ts
-    return None
-
-
-def time_in_band(
-    prices: pd.DataFrame,
-    lower: float,
-    upper: float,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> float:
-    segments = _build_time_segments(prices, price_col=price_col, ts_col=ts_col, window_start=window_start, window_end=window_end)
-    if segments.empty:
-        return 0.0
-    mask = (segments[price_col] >= lower) & (segments[price_col] <= upper)
-    return float(segments.loc[mask, "duration_s"].sum())
-
-
-def share_time_near_level(
-    prices: pd.DataFrame,
-    level: float = 0.90,
-    tolerance: float = 0.02,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> float:
-    lower = max(0.0, level - tolerance)
-    upper = min(1.0, level + tolerance)
-    segments = _build_time_segments(prices, price_col=price_col, ts_col=ts_col, window_start=window_start, window_end=window_end)
-    total = segments["duration_s"].sum()
-    if total <= 0:
-        return 0.0
-    in_band = (segments[price_col] >= lower) & (segments[price_col] <= upper)
-    return float(segments.loc[in_band, "duration_s"].sum() / total)
-
-
-def is_tailend_by_time_share(
-    prices: pd.DataFrame,
-    level: float = 0.90,
-    tolerance: float = 0.02,
-    min_share: float = 0.5,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> bool:
-    share = share_time_near_level(
-        prices,
-        level=level,
-        tolerance=tolerance,
-        price_col=price_col,
-        ts_col=ts_col,
-        window_start=window_start,
-        window_end=window_end,
-    )
-    return share >= min_share
-
-
-def time_above_threshold(
-    prices: pd.DataFrame,
-    threshold: float = 0.90,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> float:
-    segments = _build_time_segments(prices, price_col=price_col, ts_col=ts_col, window_start=window_start, window_end=window_end)
-    if segments.empty:
-        return 0.0
-    high = segments[segments[price_col] >= threshold]
-    return float(high["duration_s"].sum())
-
-
-def share_above_threshold(
-    prices: pd.DataFrame,
-    threshold: float = 0.90,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> float:
-    segments = _build_time_segments(prices, price_col=price_col, ts_col=ts_col, window_start=window_start, window_end=window_end)
-    total = segments["duration_s"].sum()
-    if total <= 0:
-        return 0.0
-    high_seconds = segments.loc[segments[price_col] >= threshold, "duration_s"].sum()
-    return float(high_seconds / total)
-
-
-def first_time_above_threshold(
-    prices: pd.DataFrame,
-    threshold: float = 0.90,
-    price_col: str = "p",
-    ts_col: str = "t",
-    window_start: Optional[Any] = None,
-    window_end: Optional[Any] = None
-) -> Optional[pd.Timestamp]:
-    segments = _build_time_segments(prices, price_col=price_col, ts_col=ts_col, window_start=window_start, window_end=window_end)
-    high_segments = segments[segments[price_col] >= threshold]
-    if high_segments.empty:
-        return None
-    return high_segments.iloc[0]["start"]
-
-
-def is_tailend_far_from_resolution(
-    market: Any,
-    prices: pd.DataFrame,
-    threshold: float = 0.90,
-    lead_time_days: int = 90,
-    min_duration_days: int = 30,
-    tolerance: float = 0.02,
-    price_col: str = "p",
-    ts_col: str = "t"
-) -> bool:
-    market_end = _extract_market_timestamp(
-        market,
-        "endDate",
-        "endDateIso",
-        "closeTime",
-        "closedTime",
-        "resolveTime",
-        "resolutionTime",
-    )
-    if market_end is None:
-        return False
-
-    lead_delta = pd.Timedelta(days=lead_time_days)
-    pivot = market_end - lead_delta
-
-    first_high = first_time_above_threshold(
-        prices,
-        threshold=threshold,
-        price_col=price_col,
-        ts_col=ts_col,
-        window_end=market_end,
-    )
-    if first_high is None or (market_end - first_high) < lead_delta:
-        return False
-
-    high_seconds_before_pivot = time_above_threshold(
-        prices,
-        threshold=threshold,
-        price_col=price_col,
-        ts_col=ts_col,
-        window_end=pivot,
-    )
-    if high_seconds_before_pivot <= 0:
-        return False
-
-    required_seconds = pd.Timedelta(days=min_duration_days).total_seconds()
-    if high_seconds_before_pivot < required_seconds:
-        return False
-
-    share_near_level = share_time_near_level(
-        prices,
-        level=threshold,
-        tolerance=tolerance,
-        price_col=price_col,
-        ts_col=ts_col,
-        window_end=pivot,
-    )
-    return share_near_level > 0
 
 def identify_market_bucket(
     prices: pd.Series,
@@ -477,19 +240,52 @@ def add_market_bucket(
 
 def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
     return fetch_market_prices_history(market_id, YES_INDEX)
-    
+  
+def find_tailend_markets(markets: pd.DataFrame,
+                        prices: pd.DataFrame,
+                        threshold: float = 0.90,
+                        percent: float = 0.60) -> pd.DataFrame:
+    tailend_markets = []
+    for _, market in markets.iterrows():
+        market_prices = prices[prices['market_id'] == int(market['id'])]
+        if market_prices.empty:
+            continue
+        if is_prices_above_then(market_prices, threshold, percent):
+            tailend_markets.append(market)
+    if not tailend_markets:
+        return pd.DataFrame(columns=markets.columns)
+    return pd.DataFrame(tailend_markets)
 
 if __name__ == "__main__":
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
-    start = pd.Timestamp('2025-03-01T00:00:00Z')
-    end = pd.Timestamp('2025-04-01T23:59:59Z')
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
+    modermarkets = markets[markets['startDate'] > pd.Timestamp('2025-01-01T00:00:00Z')]
+
+    print(len(modermarkets), 'markets starting after 2025-03-01')
+    longest = filter_by_duration(modermarkets, 70)
+    print(len(longest), 'markets with duration > 70 days')
+    tailended = find_tailend_markets(longest, prices, 0.90, 0.60)
+    print(len(tailended), 'tailend markets found')
+    print(len(prices))
+    prices['market_id'] = prices['market_id'].astype(int)
+    tailended['id'] = tailended['id'].astype(int)
+    tailenedPrices = prices[prices['market_id'].isin(tailended['id'])]
+    print(len(tailenedPrices), 'price points for tailend markets')
+    print(tailenedPrices['t'].min(), 'to', tailenedPrices['t'].max())
+    plot_prices(tailenedPrices)
+    #no_pricers = pd.read_csv(f'{PROJECT_ROOT}/data/no_price_markets.csv', names=['id'])
+    #markets = markets[~markets['id'].isin(no_pricers['id'])]
+    #find_tailend_markets(markets, prices, 0.90, 0.60)
+    
+    #start = pd.Timestamp('2025-03-01T00:00:00Z')
+    #end = pd.Timestamp('2025-04-01T23:59:59Z')
     #df = markets.copy()
     #nostart = markets['startDate'].isna()
     #print(len(df[nostart]), 'markets with no startDate')
     #markets[nostart].to_csv(Path('data/nostart.csv'), index=False)
     #print(filter_by_timeframe(markets, start, end))
-    for min in range(0,100,5):
-        print(f'Amount of markets with duration {min}-{min+5} days is {len(filter_by_duration(markets, min, min+5))}')
+    #for min in range(0,100,5):
+    #    print(f'Amount of markets with duration {min}-{min+5} days is {len(filter_by_duration(markets, min, min+5))}')
     #normalized = normalize_time(markets)
     #normalized.to_csv(Path('data/test_pipeline.csv'), index=False) 
     #save_to_csv(market.to_frame().T, Path('data/market.csv'))

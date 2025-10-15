@@ -2,7 +2,7 @@ import json
 from typing import Optional
 import pandas as pd
 from datetime import datetime
-
+from typing import Tuple
 
 def api_identify_market_outcome_winner_index(market: json) -> Optional[str]:
     """Identify the winning outcome of a market using the clobid field."""
@@ -55,7 +55,7 @@ def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) ->
     t_resolve =  pd.to_datetime(markets["closedTime"], utc=True, errors="coerce")\
         .fillna(pd.to_datetime(markets["endDate"], utc=True, errors="coerce"))
     
-    duration = t_resolve - markets["startDate"]
+    duration = t_resolve - pd.to_datetime(markets["startDate"])
     threshold = pd.Timedelta(days=min_days)
     if max_days is not None:
         tmax = pd.Timedelta(days=max_days)
@@ -66,3 +66,13 @@ def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) ->
     markets["duration_days"] = duration.dt.days
 
     return markets[mask]
+
+  
+def is_prices_above_then(
+    prices: pd.DataFrame,
+    threshold: float = 0.80,
+    required_pct: float = 0.60,
+) -> Tuple[bool, float]:
+    cond = (prices["p"] >= threshold)
+    frac = cond.mean()
+    return frac >= required_pct
