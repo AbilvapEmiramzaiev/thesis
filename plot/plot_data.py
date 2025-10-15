@@ -1,5 +1,4 @@
 from imports import *
-from fetch.tail_end_func import fetch_market, fetch_market_prices_history, fetch_markets
 
 def plot_market_history(prices: pd.DataFrame):
     x_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
@@ -12,7 +11,6 @@ def plot_market_history(prices: pd.DataFrame):
     plt.xlabel("time")
     plt.ylim(0,1)
     plt.grid(True, axis="y", linestyle="--", alpha=0.6)
-    plt.title(fetch_market(TEST_MARKET_ID)['question'])
     plt.yticks(np.arange(0, 1.05, 0.05)) 
     plt.gca().yaxis.set_major_formatter(PercentFormatter(xmax=1))
     plt.legend()
@@ -20,39 +18,36 @@ def plot_market_history(prices: pd.DataFrame):
     plt.show()
     
 
-def plot_market_from_csv(
-    csv_path: Path,
+def plot_prices(
+    df: pd.DataFrame,
     *,
     show: bool = True,
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
-    """Plot every market contained in a cached CSV file."""
-    df = pd.read_csv(csv_path)
-    if df.empty:
-        raise ValueError(f"No rows found in {csv_path}")
-
-    df["ts"] = pd.to_datetime(df["t"], unit="s", utc=True)
     ax = ax or plt.gca()
 
+    # group by market_id and plot each market with day counter
     for _, group in df.groupby("market_id"):
+        day_index = range(len(group))
         ax.scatter(
-            group["ts"],
+            day_index,
             group["p"],
-            s=14,
-            alpha=0.5,
+            s=3,
+            alpha=0.7,
             edgecolors="none",
         )
-
+    ax.set_xlabel("day index (0 = market start)")
     ax.set_ylabel("probability")
-    ax.set_xlabel("time")
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0.8, 1)
     ax.grid(True, axis="y", linestyle="--", alpha=0.6)
+
     legend = ax.get_legend()
     if legend:
         legend.remove()
+
     if show and ax.figure:
-        ax.figure.autofmt_xdate()
         plt.show()
+
     return ax
 
 
@@ -76,8 +71,6 @@ def plot_trades(trades: pd.DataFrame):
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    csv_path = Path(__file__).resolve().parents[1] / CSV_OUTPUT_PATH
-    plot_market_from_csv(csv_path)
     return 0
 
 
