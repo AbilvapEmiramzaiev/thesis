@@ -151,23 +151,20 @@ def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataF
     df = df.sort_values("ts").reset_index(drop=True)
     return df[["ts", "price", "outcome", "side", "size"]]
 
-def fetch_market_prices_history(market: pd.Series, token_index: int, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
+def fetch_market_prices_history(startDate: str, clobTokenId: str, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
     """Fetches historical market prices from Polymarket Data API. 1440 = daily"""
-    token_id = market["clobTokenIds"][token_index]
-    startTs = startTs if startTs else gamma_ts_to_utc(market['startDate'])
-    if market is None or market.empty or ("error" in market.index):
-        raise RuntimeError(f"Market {market_id} not found or error: {market.get('error','unknown')}")
+    startTs = startTs if startTs else gamma_ts_to_utc(startDate)
     url = f"{CLOB_API}/prices-history"
     all_rows = []
-    r = requests.get(
+    r = SESSION.get(
         url,
-        params={"market": token_id, 
+        params={"market": clobTokenId, 
                 "startTs": startTs,
                 "fidelity": fidelity,},
     )
     r.raise_for_status()
     all_rows = r.json()['history']
-    print('Fetched', len(all_rows), 'price points for market', market_id, ' ', startTs)
+    print('Fetched', len(all_rows), 'price points for market', clobTokenId[:3], '...',clobTokenId[-3:], ' ', startTs)
     if not all_rows:
         return pd.DataFrame()
     df = pd.json_normalize(all_rows)

@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 
-def identify_market_outcome_winner_index(market: json) -> Optional[str]:
+def api_identify_market_outcome_winner_index(market: json) -> Optional[str]:
     """Identify the winning outcome of a market using the clobid field."""
     tol = 1e-3
     outcomes = market.get("outcomePrices", [])
@@ -20,6 +20,25 @@ def identify_market_outcome_winner_index(market: json) -> Optional[str]:
             # Check if p is “close enough” to 1.0
             if abs(p - 1.0) <= tol:
                 return i
+            
+def get_market_winner_clobTokenId(market: pd.Series) -> Optional[str]:
+    winner = closer_to_one(float(market['prob_yes']), float(market['prob_no']))
+    if winner == float(market['prob_yes']):
+        return market['clobTokenIdYes']
+    elif winner == float(market['prob_no']):
+        return market['clobTokenIdNo']
+    else:
+        return None 
+
+def closer_to_one(yes: float, no: float) -> float:
+    """Return whichever of x or y is closer to 1."""
+    if abs(yes - 1) < abs(no - 1):
+        return yes
+    elif abs(no - 1) < abs(yes - 1):
+        return no
+    else:
+        return None
+
 def filter_by_timeframe(markets: pd.DataFrame, start_ts: pd.Timestamp, end_ts: pd.Timestamp) -> pd.DataFrame:
     s = pd.to_datetime(markets["startDate"], utc=True, errors="coerce")
     e = pd.to_datetime(markets["endDate"],   utc=True, errors="coerce")
