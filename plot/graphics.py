@@ -1,6 +1,7 @@
 from imports import *
 from plot.plot_data import *
 from fetch.tail_end_func import find_tailend_markets
+import mplcursors
 
 #plot graphic with multiple APY lines for each market (markets are tailended)
 # and filtered by year or half-year
@@ -19,14 +20,37 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
     prices['market_id'] = prices['market_id'].astype(int)
     yearMarkets['id'] = yearMarkets['id'].astype(int)
     in_markets = prices['market_id'].isin(yearMarkets['id'])
-    t_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
-    in_2024 = (t_utc >= start) & (t_utc < end)
-    filtered_prices = prices[in_markets & in_2024]
-
+    #t_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
+    #in_2024 = (t_utc >= start) & (t_utc < end)
+    filtered_prices = prices[in_markets]
+    
     #plot = plot_prices(filtered_prices, show=False)
-    # Constrain x-axis to 2024 for clarity
     ax = plt.gca()
-    ax.set_xlim(start, end)
+    ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+    ax2 = None
+
+    for _, m in yearMarkets.head(500).iterrows():
+        mp = filtered_prices[filtered_prices['market_id'] == m['id']]
+        res = m['closedTime']
+        label = f"M {m['id']}"
+        if m['id'] == 254097:
+             print(1)
+        ax2 = add_market_apy_line(ax, mp, resolution_time=res, label=label, ax2=ax2)
+    plt.tight_layout()
+    
+    
+    
+    cursor = mplcursors.cursor(hover=True)
+    if ax.get_legend():
+            ax.get_legend().set_visible(False)
+    @cursor.connect("add")
+    def on_hover(sel):
+        # sel.artist is the line you hovered on
+        line = sel.artist
+        label = line.get_label()  # your "market_id APY" label
+        sel.annotation.set_text(label)
+        sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
+    
     plt.show()
 
 

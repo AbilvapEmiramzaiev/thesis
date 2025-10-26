@@ -6,7 +6,8 @@ if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from imports import *
-from plot.plot_data import plot_prices
+from plot.plot_data import *
+from plot.graphics import *
 
 def fetch_markets(
     size: int = 0,
@@ -246,6 +247,8 @@ def find_tailend_markets(markets: pd.DataFrame,
                         threshold: float = 0.90,
                         percent: float = 0.60) -> pd.DataFrame:
     tailend_markets = []
+    markets['id'] = pd.to_numeric(markets['id'], errors='coerce').astype('Int64')
+
     for _, market in markets.iterrows():
         market_prices = prices[prices['market_id'] == int(market['id'])]
         if market_prices.empty:
@@ -256,24 +259,31 @@ def find_tailend_markets(markets: pd.DataFrame,
         return pd.DataFrame(columns=markets.columns)
     return pd.DataFrame(tailend_markets)
 
+
+
+
+
+
+
 if __name__ == "__main__":
 
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
-    #modermarkets = markets[markets['startDate'] > pd.Timestamp('2025-01-01T00:00:00Z')]
-    modermarkets = markets.copy()
-    print(len(modermarkets), 'markets starting after 2025-03-01')
-    filtered = filter_by_timeframe(modermarkets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
-    print(len(filtered), 'markets with duration > 70 days')
-    tailended = find_tailend_markets(filtered, prices, 0.90, 0.60)
-    print(len(tailended), 'tailend markets found')
-    print(len(prices))
+    #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
+
+
+
+    tailended = find_tailend_markets(markets, prices, 0.9, 0.6)
+    
     prices['market_id'] = prices['market_id'].astype(int)
     tailended['id'] = tailended['id'].astype(int)
-    tailenedPrices = prices[prices['market_id'].isin(tailended['id'])]
-    print(len(tailenedPrices), 'price points for tailend markets')
-    print(tailenedPrices['t'].min(), 'to', tailenedPrices['t'].max())
-    plot_prices(tailenedPrices)
+    tailenedPrices = prices[prices['market_id'].isin(markets['id'])]
+    
+    
+    print(len(tailended))
+    graphic_apy_per_market(tailended, prices)
+
+
 
     tmp = markets.copy()
     tmp['end_dt'] = pd.to_datetime(tmp['endDate'], utc=True, errors='coerce').dt.normalize()
