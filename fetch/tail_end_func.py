@@ -273,7 +273,7 @@ if __name__ == "__main__":
 
 
 
-    tailended = find_tailend_markets(markets, prices, 0.9, 0.6)
+    tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
     
     prices['market_id'] = prices['market_id'].astype(int)
     tailended['id'] = tailended['id'].astype(int)
@@ -281,8 +281,8 @@ if __name__ == "__main__":
     
     
     print(len(tailended))
-    graphic_apy_per_market(tailended, prices)
-
+    #graphic_apy_per_market(tailended, prices)
+    graphic_min_apy_line(tailended, prices)
 
 
     tmp = markets.copy()

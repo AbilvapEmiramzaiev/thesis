@@ -17,6 +17,26 @@ def plot_market_history(prices: pd.DataFrame):
     plt.tight_layout()
     plt.show()
 
+    
+def add_stats_panel(ax, rows, loc="upper left"):
+    """
+    rows: list of (label, value) tuples -> displayed in two columns.
+    """
+    # Make a two-column monospace block
+    left_w = max(len(lbl) for lbl, _ in rows)
+    text = "\n".join(f"{lbl:<{left_w}}  {val}" for lbl, val in rows)
+
+    ta = TextArea(text, textprops=dict(family="monospace"))
+    box = AnchoredOffsetbox(
+        loc=loc, child=ta, pad=0.4, borderpad=0.6, frameon=True
+    )
+    # Style the frame a bit
+    box.patch.set_boxstyle("round,pad=0.4,rounding_size=0.2")
+    box.patch.set_alpha(0.9)
+    ax.add_artist(box)
+    return box
+
+
 def add_market_apy_line(
     ax: plt.Axes,
     prices: pd.DataFrame,
@@ -40,7 +60,7 @@ def add_market_apy_line(
     p = prices[price_col].clip(1e-9, 1 - 1e-9)
     res_ts = pd.to_datetime(resolution_time, utc=True)
     dt_days = (res_ts - t).dt.total_seconds() / 86400.0
-    m = dt_days > 0
+    m = dt_days > 3.0 #how much days before resolution to ignore
     t, p, dt_days = t[m], p[m], dt_days[m]
     apy = ((1.0 - p) / p) * (365.0 / dt_days)
 
