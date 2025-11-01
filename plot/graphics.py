@@ -3,10 +3,11 @@ from plot.plot_data import *
 from fetch.tail_end_func import find_tailend_markets
 import mplcursors
 
-mind = 30
-maxd = 100
-amount = 20
-
+mind = 14
+maxd = 30
+amount = 0
+start = pd.Timestamp('2023-01-01T00:00:00Z')
+end = pd.Timestamp('2024-01-01T00:00:00Z')
 #plot graphic with multiple APY lines for each market (markets are tailended)
 # and filtered by year or half-year
 def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
@@ -16,8 +17,6 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
     e = pd.to_datetime(markets["endDate"], utc=True, errors="coerce")
 
     # Select markets that overlap calendar year 2024
-    start = pd.Timestamp('2024-01-01T00:00:00Z')
-    end = pd.Timestamp('2025-01-01T00:00:00Z')
     mask = (s >= start) & (e <= end)
     yearMarkets = markets.loc[mask].copy()
 
@@ -30,20 +29,44 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
     filtered_prices = prices[in_markets]
     
     #plot = plot_prices(filtered_prices, show=False)
-    ax = plt.gca()
+    #ax = plt.gca()
+    fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)  # вместо plt.gca()
+
     ax.grid(True, axis="x", linestyle="--", alpha=0.3)
     ax2 = None
-    for _, m in yearMarkets.head(amount).iterrows():
+    per_market_mean_apy = []
+    medians = []
+    subset = yearMarkets.head(amount) if amount > 0 else yearMarkets
+
+    for _, m in subset.iterrows():
         mp = filtered_prices[filtered_prices['market_id'] == m['id']]
         res = m['closedTime']
         label = f"M {m['id']}"
-        ax2 = add_market_apy_line(ax, mp, resolution_time=res, label=label, ax2=ax2)
-    plt.tight_layout()
+        ax2, apy_vals = add_market_apy_line(ax, mp, resolution_time=res, label=label, ax2=ax2)
+        if apy_vals is not None and len(apy_vals) > 0:
+            per_market_mean_apy.append(float(np.mean(apy_vals)))
+            medians.append(float(np.median(apy_vals)))
+    #plt.tight_layout()
+    #plt.ylim(0, 10) # zoom
+
+
+    liquidity_avg = yearMarkets['liquidityNum'].mean().round(2)
+    # average time to resolution (in days) for the displayed markets
+    avg_res_days = pd.to_numeric(yearMarkets.get('duration_days', pd.Series(dtype=float))).mean()
+    avg_res_days_str = f"{avg_res_days:.1f} days" if pd.notna(avg_res_days) else "n/a"
+
+    avg_apy = float(np.mean(per_market_mean_apy)) if per_market_mean_apy else float('nan')
+    media_apy = float(np.median(medians)) if per_market_mean_apy else float('nan')
+    avg_apy_str = f"{avg_apy * 100:.2f} %" if np.isfinite(avg_apy) else "n/a"
     rows = [
-        ("Markets", amount),
+        ("Markets", amount if amount > 0 else len(yearMarkets)),
         ("Duration (min)", f"{mind} days"),
         ("Duration (max)", f"{maxd} days"),
-        ("Tailend ", f"{TAILEND_PERCENT * 100}%"),
+        ("Liquidity (avg)", f"{liquidity_avg if liquidity_avg else 'nan'} $"),
+        ("APY (avg)", avg_apy_str),
+        ("APY (median)", f"{media_apy * 100:.2f} %"),
+        ("Resolution (avg)", avg_res_days_str),
+        ("Tailendness ", f"{TAILEND_PERCENT * 100}%"),
         ("Tailend rate ", f"{TAILEND_RATE * 100}%"),
 
     ]
@@ -60,8 +83,10 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
         label = line.get_label()  # your "market_id APY" label
         sel.annotation.set_text(label)
         sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
-    
+    ax.set_title(f"APY per market {start.strftime('%d/%m/%y')} - {end.strftime('%d/%m/%y')}", fontsize=12, loc="center", pad=8)  # loc: 'left'|'center'|'right'
+
     plt.show()
+    plt.close(fig) 
 
 
 

@@ -111,7 +111,7 @@ def is_single_market_event(
             )  
     r.raise_for_status()
     j = r.json()
-    print(f'Marke {market['id']} is { "single-event" if len(j['markets']) == 1 else "multi-event"} market')
+    print(f'Market {market['id']} is { "single-event" if len(j['markets']) == 1 else "multi-event"} market')
     return len(j['markets']) == 1
 
 def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataFrame:
@@ -281,8 +281,8 @@ if __name__ == "__main__":
     
     
     print(len(tailended))
-    #graphic_apy_per_market(tailended, prices)
-    graphic_min_apy_line(tailended, prices)
+    graphic_apy_per_market(tailended, prices)
+    #graphic_min_apy_line(tailended, prices)
 
 
     tmp = markets.copy()
