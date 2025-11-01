@@ -30,9 +30,9 @@ def add_stats_panel(ax, rows, loc="upper left"):
     box = AnchoredOffsetbox(
         loc=loc, child=ta, pad=0.4, borderpad=0.6, frameon=True
     )
-    # Style the frame a bit
     box.patch.set_boxstyle("round,pad=0.4,rounding_size=0.2")
     box.patch.set_alpha(0.9)
+    box.set_zorder(10)   
     ax.add_artist(box)
     return box
 
@@ -55,6 +55,8 @@ def add_market_apy_line(
 
     Pass the same `ax` across calls to stack multiple APY lines on one figure.
     Optionally pass an existing right axis `ax2` to reuse the same secondary y-axis.
+    Returns a tuple (ax2, apy_values) where `apy_values` is a 1D numpy array
+    of computed APY values after masking (e.g., excluding last 3 days).
     """
     t = pd.to_datetime(prices[ts_col], unit="s", utc=True)
     p = prices[price_col].clip(1e-9, 1 - 1e-9)
@@ -72,7 +74,7 @@ def add_market_apy_line(
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
     ax.legend(h1 + h2, l1 + l2, loc="best", frameon=False)
-    return ax2
+    return ax2, apy.values if hasattr(apy, 'values') else np.asarray(apy)
 
 def add_apy_axis_from_path(
     ax: plt.Axes,
