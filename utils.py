@@ -73,3 +73,26 @@ def read_markets_csv(path: Path) -> pd.DataFrame:
     utc_conv = lambda s: pd.to_datetime(s, utc=True, errors="coerce")
     converters = {c: utc_conv for c in TIME_COLS}
     return pd.read_csv(path, converters=converters)
+
+
+def compute_market_apy_series(
+    df: pd.DataFrame,
+    *,
+    resolution_time,
+    price_col: str = "p",
+    ts_col: str = "t",
+    min_days_before_res: float = 3.0,
+) -> pd.Series:
+    """
+    Return APY time series (indexed by timestamp) for a single market.
+    APY = ((1 - p) / p) * (365 / days_to_resolution)
+    Excludes the last `min_days_before_res` days before resolution.
+    """
+    t = pd.to_datetime(df[ts_col], unit="s", utc=True)
+    p = df[price_col].clip(1e-9, 1 - 1e-9)
+    res_ts = pd.to_datetime(resolution_time, utc=True)
+    dt_days = (res_ts - t).dt.total_seconds() / 86400.0
+    m = dt_days > min_days_before_res
+    apy = ((1.0 - p[m]) / p[m]) * (365.0 / dt_days[m])
+    s = pd.Series(apy.values, index=t[m])
+    return s.sort_index()
