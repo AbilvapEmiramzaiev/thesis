@@ -283,7 +283,9 @@ if __name__ == "__main__":
     print(len(tailended))
     #graphic_apy_per_market(tailended, prices)
     #graphic_min_apy_line(tailended, prices)
-    graphic_apy_aggregated(tailended, tailenedPrices)
+    #graphic_apy_aggregated(tailended, tailenedPrices)
+    graphic_apy_aggregated_many_years(tailended, tailenedPrices)
+
 
     tmp = markets.copy()
     tmp['end_dt'] = pd.to_datetime(tmp['endDate'], utc=True, errors='coerce').dt.normalize()

@@ -76,6 +76,10 @@ def add_market_apy_line(
     ax.legend(h1 + h2, l1 + l2, loc="best", frameon=False)
     return ax2, apy.values if hasattr(apy, 'values') else np.asarray(apy)
 
+
+
+
+
 def add_apy_axis_from_path(
     ax: plt.Axes,
     path: pd.DataFrame,

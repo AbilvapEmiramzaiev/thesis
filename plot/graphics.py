@@ -3,12 +3,16 @@ from plot.plot_data import *
 from fetch.tail_end_func import find_tailend_markets
 import mplcursors
 
-mind = 14
-maxd = 30
+mind = 30
+maxd = 999
 amount = 0
-start = pd.Timestamp('2023-01-01T00:00:00Z')
-end = pd.Timestamp('2024-01-01T00:00:00Z')
+start = pd.Timestamp('2022-01-01T00:00:00Z')
+end = pd.Timestamp('2026-01-01T00:00:00Z')
 
+#quants aggregated APY
+q1_mark = 0.00
+q2_mark = 0.025
+q3_mark = 0.4
 
 def prepare_apy_graphics(markets:pd.DataFrame, prices:pd.DataFrame):
     markets = filter_by_duration(markets, mind, maxd)
@@ -26,12 +30,14 @@ def prepare_apy_graphics(markets:pd.DataFrame, prices:pd.DataFrame):
     #t_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
     #in_2024 = (t_utc >= start) & (t_utc < end)
     filtered_prices = prices[in_markets]
+    yearMarkets = yearMarkets.head(amount) if amount and amount > 0 else yearMarkets.copy()
     return yearMarkets, filtered_prices
    
 def finish_apy_graphics(yearMarkets:pd.DataFrame,
-                        per_market_mean_apy:List[float],
-                        medians:List[float],
-                        ax:plt.Axes):
+                        per_market_mean_apy:List[float] = [],
+                        medians:List[float] = [],
+                        ax:plt.Axes = None,
+                        hoverEffect: bool = True):
     liquidity_avg = yearMarkets['liquidityNum'].mean().round(2)
     # average time to resolution (in days) for the displayed markets
     avg_res_days = pd.to_numeric(yearMarkets.get('duration_days', pd.Series(dtype=float))).mean()
@@ -52,18 +58,18 @@ def finish_apy_graphics(yearMarkets:pd.DataFrame,
         ("Tailend rate ", f"{TAILEND_RATE * 100}%"),
 
     ]
+    #ax.set_ylim(0, 0.1)
     add_stats_panel(ax, rows, loc="upper left")   # or "upper right", etc.
-    cursor = mplcursors.cursor(hover=True)
-    if ax.get_legend():
-            ax.get_legend().set_visible(False)
-    @cursor.connect("add")
-    def on_hover(sel):
-        # sel.artist is the line you hovered on
-        line = sel.artist
-        label = line.get_label()  # your "market_id APY" label
-        sel.annotation.set_text(label)
-        sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
-    
+    if hoverEffect:
+        cursor = mplcursors.cursor(hover=True)
+        @cursor.connect("add")
+        def on_hover(sel):
+            # sel.artist is the line you hovered on
+            line = sel.artist
+            label = line.get_label()  # your "market_id APY" label
+            sel.annotation.set_text(label)
+            sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
+        
 
 #plot graphic with multiple APY lines for each market (markets are tailended)
 # and filtered by year or half-year
@@ -184,13 +190,16 @@ def graphic_apy_aggregated(
     ts_col: str = "t",
     resample_rule: str = "1D",  # aggregate time grid (daily)
     min_days_before_res: float = 3.0,
-    title_prefix: str = "Aggregated APY (10/50/90)"
+    title_prefix: str = "Aggregated APY (10/50/90)",
+    show_count_markers: bool = True,
+    marker_rule: str = "1W",     # e.g. "1W", "2W", "1M"
 ):
     # You send already tail-ended markets!
     yearMarkets, filtered_prices = prepare_apy_graphics(markets, prices)
-    subset = yearMarkets.head(amount) if amount and amount > 0 else yearMarkets.copy()
     apy_frames = []
-    for _, m in subset.iterrows():
+    per_market_mean_apy = []
+    medians = []
+    for _, m in yearMarkets.iterrows():
         mid = m["id"]
         mp = filtered_prices[filtered_prices["market_id"] == mid]
         s = compute_market_apy_series(
@@ -202,6 +211,9 @@ def graphic_apy_aggregated(
         )
         # Resample to a common grid for clean aggregation (median/quantiles)
         sr = s.resample(resample_rule).median()
+        if s is not None and len(s) > 0:
+            per_market_mean_apy.append(float(np.mean(sr)))
+            medians.append(float(np.median(sr)))
         sr.name = f"M{mid}"
         apy_frames.append(sr)
 
@@ -212,15 +224,17 @@ def graphic_apy_aggregated(
     apy_mat = apy_mat.ffill(limit=3)
 
     # Compute timewise percentiles
-    q10 = apy_mat.quantile(0.10, axis=1)
-    q50 = apy_mat.quantile(0.50, axis=1)
-    q90 = apy_mat.quantile(0.90, axis=1)
+    
+    title_prefix = f"Aggregated APY ({int(q1_mark*100)}%/{int(q2_mark*100)}%/{int(q3_mark*100)}%)"
+    q1 = apy_mat.quantile(q1_mark, axis=1)
+    q2 = apy_mat.quantile(q2_mark, axis=1)
+    q3 = apy_mat.quantile(q3_mark, axis=1)
 
     # Overall quantiles (across markets × time), useful for legend title
     flat_vals = apy_mat.stack().dropna().values
-    overall_q10 = float(np.percentile(flat_vals, 10)) if flat_vals.size else np.nan
-    overall_q50 = float(np.percentile(flat_vals, 50)) if flat_vals.size else np.nan
-    overall_q90 = float(np.percentile(flat_vals, 90)) if flat_vals.size else np.nan
+    overall_q1 = float(np.percentile(flat_vals, q1_mark*100)) if flat_vals.size else np.nan
+    overall_q2 = float(np.percentile(flat_vals, q2_mark*100)) if flat_vals.size else np.nan
+    overall_q3 = float(np.percentile(flat_vals, q3_mark*100)) if flat_vals.size else np.nan
 
     # Time range for title
     start_ts = pd.to_datetime(filtered_prices[ts_col], unit="s", utc=True).min()
@@ -230,8 +244,8 @@ def graphic_apy_aggregated(
     fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
     ax.grid(True, axis="x", linestyle="--", alpha=0.3)
 
-    ax.fill_between(q10.index, q10.values, q90.values, alpha=0.2, label="P10–P90")
-    ax.plot(q50.index, q50.values, linewidth=2, label="Median (P50)")
+    ax.fill_between(q1.index, q1.values, q3.values, alpha=0.2, label=f"P{q1_mark*100}%–P{q3_mark*100}%")
+    ax.plot(q2.index, q2.values, linewidth=2, label=f"Median (P{q2_mark*100}%)")
 
     # Niceties
     ax.set_ylabel("annualized yield (*100%)")
@@ -240,12 +254,147 @@ def graphic_apy_aggregated(
         f"{title_prefix} across {n_markets} markets\n"
         f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
     )
+   # ax.set_ylim(0.01, 0.8)
     ax.set_title(title, fontsize=12, loc="center", pad=8)
-    finish_apy_graphics(yearMarkets, [], [], ax)
-    leg_title = f"Overall P10/P50/P90:\n{overall_q10:.2f} / {overall_q50:.2f} / {overall_q90:.2f}"
-    leg = ax.legend(frameon=False, title=leg_title, loc="best")
+
+    # Minimal weekly boxes with contributing market counts on the median line
+    if show_count_markers and not apy_mat.empty:
+        counts = apy_mat.count(axis=1).resample(marker_rule).mean().round()
+        med = q2.resample(marker_rule).median()
+        for t, n in counts.dropna().items():
+            y = med.get(t)
+            if pd.isna(y):
+                continue
+            ax.text(
+                t, float(y), f"{int(n)}",
+                ha="center", va="center", fontsize=8,
+                bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="tab:blue", lw=0.8),
+                zorder=5,
+            )
+    finish_apy_graphics(yearMarkets, [],[],ax=ax, hoverEffect=False)
+    leg_title = f"Overall P{q1_mark*100}/P{q2_mark*100}/P{q3_mark*100}:\n{overall_q1:.2f} / {overall_q2:.2f} / {overall_q3:.2f}"
+    leg = ax.legend(frameon=False, title=leg_title, loc="upper right")
     if leg and leg.get_title():
         leg.get_title().set_fontsize(9)
+
+    plt.show()
+    plt.close(fig)
+
+
+def graphic_apy_aggregated_many_years(
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+    *,
+    price_col: str = "p",
+    ts_col: str = "t",
+    resample_rule: str = "1D",
+    min_days_before_res: float = 3.0,
+    q_lo_mark: float = q1_mark,     # 5th pct
+    q_md_mark: float = q2_mark,     # median
+    q_hi_mark: float = q3_mark,     # 60th pct (keeps spikes out)
+    shade_years: bool = True,
+    show_count_markers: bool = True,
+    marker_rule: str = "1W",
+    title_prefix: str = "Aggregated APY by Year",
+):
+    # ---------- 1) Same prep as your function ----------
+    yearMarkets, filtered_prices = prepare_apy_graphics(markets, prices)
+
+    frames = []
+    for _, m in yearMarkets.iterrows():
+        mid = m["id"]
+        mp = filtered_prices[filtered_prices["market_id"] == mid]
+        s = compute_market_apy_series(
+            mp,
+            resolution_time=m["closedTime"],
+            price_col=price_col,
+            ts_col=ts_col,
+            min_days_before_res=min_days_before_res,
+        )
+        sr = s.resample(resample_rule).median()  # align to daily, robust
+        sr.name = f"M{mid}"
+        frames.append(sr)
+
+    apy_mat = pd.concat(frames, axis=1).ffill(limit=3)
+    flat_vals = apy_mat.stack().dropna().values
+    overall_lo = float(np.percentile(flat_vals, q_lo_mark * 100))
+    overall_md = float(np.percentile(flat_vals, q_md_mark * 100))
+    overall_hi = float(np.percentile(flat_vals, q_hi_mark * 100))
+
+    # These are timewise (row-wise) quantiles across markets for *all* timestamps;
+    # we’ll slice them by year when plotting.
+    q_lo_all = apy_mat.quantile(q_lo_mark, axis=1)
+    q_md_all = apy_mat.quantile(q_md_mark, axis=1)
+    q_hi_all = apy_mat.quantile(q_hi_mark, axis=1)
+
+    # ---------- 2) Figure ----------
+    fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
+    ax.grid(True, axis="x", linestyle="--", alpha=0.3)
+    ax.set_ylabel("annualized yield (*100%)")
+
+    # Year partitions present in the time index
+    years = sorted(np.unique(apy_mat.index.year))
+
+    # Nice repeating color cycle (same hue for band+line per year)
+    # You can use your own palette if you want.
+    base_colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", ["C0","C1","C2","C3","C4","C5"])
+
+    # ---------- 3) Plot per-year with background shade ----------
+    for i, yr in enumerate(years):
+        mask = (apy_mat.index.year == yr)
+        if not mask.any():
+            continue
+
+        # background shade
+        if shade_years:
+            ax.axvspan(
+                apy_mat.index[mask][0],
+                apy_mat.index[mask][-1],
+                facecolor="0.92" if i % 2 == 0 else "0.97",
+                alpha=1.0,
+                zorder=0,
+            )
+
+        # slice quantile series to that year
+        q_lo = q_lo_all[mask]
+        q_md = q_md_all[mask]
+        q_hi = q_hi_all[mask]
+
+        c = base_colors[i % len(base_colors)]
+        ax.fill_between(q_lo.index, q_lo.values, q_hi.values, alpha=0.25, label=f"{yr}: P{int(q_lo_mark*100)}–P{int(q_hi_mark*100)}", color=c)
+        ax.plot(q_md.index, q_md.values, linewidth=2, label=f"{yr}: Median (P{int(q_md_mark*100)})", color=c)
+       # ax.set_ylim(0, 10)
+        # optional per-year count markers along the median
+        if False and show_count_markers:
+            counts = apy_mat.loc[mask].count(axis=1).resample(marker_rule).mean().round()
+            med = q_md.resample(marker_rule).median()
+            for t, n in counts.dropna().items():
+                y = med.get(t)
+                if pd.isna(y):
+                    continue
+                ax.text(
+                    t, float(y), f"{int(n)}",
+                    ha="center", va="center", fontsize=8,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec=c, lw=0.8),
+                    zorder=5,
+                )
+
+    # ---------- 4) Title, legend ----------
+    start_ts = apy_mat.index.min()
+    end_ts   = apy_mat.index.max()
+    title = (
+        f"{title_prefix}  (P{int(q_lo_mark*100)}/P{int(q_md_mark*100)}/P{int(q_hi_mark*100)})\n"
+        f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
+    )
+    ax.set_title(title, fontsize=12, loc="center", pad=8)
+    finish_apy_graphics(yearMarkets, [], [], ax=ax, hoverEffect=False)
+    leg_title = (
+        f"Overall P{int(q_lo_mark*100)}/P{int(q_md_mark*100)}/P{int(q_hi_mark*100)}:\n"
+        f"{overall_lo:.2f} / {overall_md:.2f} / {overall_hi:.2f}"
+    )
+    #leg = ax.legend(frameon=False, title=leg_title, loc="upper right", ncol=1)
+    #if leg and leg.get_title():
+    #    leg.get_title().set_fontsize(9)
 
     plt.show()
     plt.close(fig)
