@@ -59,10 +59,10 @@ def fetch_markets(
         filtered = []
         for m in all_markets:
             keep = True
-            for fn in post_filters:
+            for fn, result in post_filters.items():
                 if isinstance(fn, str):
                     fn = globals().get(fn)
-                if not fn(m):
+                if fn(m) is not result:
                     keep = False
                     break
             if keep:

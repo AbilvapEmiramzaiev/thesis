@@ -1,6 +1,5 @@
 from imports import *
 from plot.plot_data import *
-from fetch.tail_end_func import find_tailend_markets
 import mplcursors
 
 mind = 30
@@ -12,7 +11,9 @@ end = pd.Timestamp('2026-01-01T00:00:00Z')
 #quants aggregated APY
 q1_mark = 0.00
 q2_mark = 0.025
-q3_mark = 0.4
+q3_mark = 0.3
+
+graphic_descrioption = f"Average annualized return (APY) of tail-end markets (p > {int(TAILEND_PERCENT*100)}%). Reflects expected gain from holding near-certain outcome tokens until resolution."
 
 def prepare_apy_graphics(markets:pd.DataFrame, prices:pd.DataFrame):
     markets = filter_by_duration(markets, mind, maxd)
@@ -58,6 +59,12 @@ def finish_apy_graphics(yearMarkets:pd.DataFrame,
         ("Tailend rate ", f"{TAILEND_RATE * 100}%"),
 
     ]
+    ax.text(
+        0.5, 1.02, graphic_descrioption,
+        transform=ax.transAxes,
+        ha="center", va="bottom",
+        family="monospace", fontsize=9,
+    )
     #ax.set_ylim(0, 0.1)
     add_stats_panel(ax, rows, loc="upper left")   # or "upper right", etc.
     if hoverEffect:
@@ -107,7 +114,7 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
 def graphic_kickoff(markets:pd.DataFrame, prices:pd.DataFrame):
     filtered = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
     print(len(filtered), 'markets with duration > 70 days')
-    tailended = find_tailend_markets(filtered, prices, 0.90, 0.60)
+    tailended = markets.copy()#find_tailend_markets(filtered, prices, 0.90, 0.60)
     print(len(tailended), 'tailend markets found')
     print(len(prices))
     prices['market_id'] = prices['market_id'].astype(int)
@@ -328,7 +335,7 @@ def graphic_apy_aggregated_many_years(
     q_hi_all = apy_mat.quantile(q_hi_mark, axis=1)
 
     # ---------- 2) Figure ----------
-    fig, ax = plt.subplots(figsize=(12, 4), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(16, 6), constrained_layout=True)
     ax.grid(True, axis="x", linestyle="--", alpha=0.3)
     ax.set_ylabel("annualized yield (*100%)")
 
@@ -363,7 +370,7 @@ def graphic_apy_aggregated_many_years(
         c = base_colors[i % len(base_colors)]
         ax.fill_between(q_lo.index, q_lo.values, q_hi.values, alpha=0.25, label=f"{yr}: P{int(q_lo_mark*100)}–P{int(q_hi_mark*100)}", color=c)
         ax.plot(q_md.index, q_md.values, linewidth=2, label=f"{yr}: Median (P{int(q_md_mark*100)})", color=c)
-       # ax.set_ylim(0, 10)
+        ax.set_ylim(0, 0.8)
         # optional per-year count markers along the median
         if False and show_count_markers:
             counts = apy_mat.loc[mask].count(axis=1).resample(marker_rule).mean().round()
@@ -386,7 +393,7 @@ def graphic_apy_aggregated_many_years(
         f"{title_prefix}  (P{int(q_lo_mark*100)}/P{int(q_md_mark*100)}/P{int(q_hi_mark*100)})\n"
         f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
     )
-    ax.set_title(title, fontsize=12, loc="center", pad=8)
+    ax.set_title(title, fontsize=12, loc="center", pad=8, y=1.04)
     finish_apy_graphics(yearMarkets, [], [], ax=ax, hoverEffect=False)
     leg_title = (
         f"Overall P{int(q_lo_mark*100)}/P{int(q_md_mark*100)}/P{int(q_hi_mark*100)}:\n"

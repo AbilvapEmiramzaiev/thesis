@@ -68,7 +68,7 @@ def stream_markets_to_csv(
     limit: int|Literal['all'] = 100,
     page_size: int = 500,
     offset: int = GAMMA_API_OLD_MARKETS_OFFSET,
-    out_path:Path = Path(f"data/test_pipeline.csv")
+    out_path:Path = Path(f"data/categorical.csv")
 
 ) -> None:
     header_written = out_path.exists() and out_path.stat().st_size > 0
@@ -79,7 +79,7 @@ def stream_markets_to_csv(
             size=page_size,
             page=page_size,
             offset=offset,
-            post_filters={"is_single_market_event": True}
+            post_filters={"is_single_market_event": False}
         )
 
         if batch is None:
@@ -131,7 +131,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         help='Number of markets to fetch (or "all")',
     )
     parser.add_argument("--page-size", dest="page_size", type=int, default=500, help="Page size for each markets fetch")
-    parser.add_argument("--offset", type=int, default=GAMMA_API_LAST_PIPELINE_OFFSET, help="Initial offset for pagination")
+    parser.add_argument("--offset", type=int, default=GAMMA_API_DEAD_MARKETS_OFFSET, help="Initial offset for pagination")
     parser.add_argument("--fidelity", type=int, default=1440, help="Fidelity passed to prices-history endpoint")
     parser.add_argument("--token-index", type=int, default=YES_INDEX, help="Outcome index to download prices for")
     parser.add_argument("--plot-market", help="Optional market id to plot after collection")
@@ -140,16 +140,16 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    if(args.fetch_markets):
+    if(True or args.fetch_markets):
         stream_markets_to_csv(limit=args.limit, page_size=args.page_size, offset=args.offset)
         return 0
 
-    markets = pd.read_csv('data/test_pipeline.csv')
-    prices = collect_market_prices(
-        markets,
-        fidelity=args.fidelity,
-        out_path=args.output,
-    )
+    #markets = pd.read_csv('data/test_pipeline.csv')
+    #prices = collect_market_prices(
+    #    markets,
+    #    fidelity=args.fidelity,
+    #    out_path=args.output,
+    #)
 
     if prices.empty:
         print("No price data collected.")
