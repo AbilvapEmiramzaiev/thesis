@@ -45,7 +45,7 @@ def make_session() -> requests.Session:
     retry = Retry(
         total=5,                  # total retries
         connect=5, read=5,
-        backoff_factor=0.5,       # 0.5, 1.0, 2.0, 4.0 ...
+        backoff_factor=1,       # 0.5, 1.0, 2.0, 4.0 ...
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"],  # retry only safe methods
         raise_on_status=False,
@@ -57,7 +57,7 @@ def make_session() -> requests.Session:
     return s
 
 SESSION = make_session()
-DEFAULT_TIMEOUT = (3.05, 15)
+DEFAULT_TIMEOUT = (5, 30)
 
 # Constants
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -74,6 +74,7 @@ CLOB_MAX_INTERVAL='max'
 CLOB_FIDELITY_TIME='m'
 GAMMA_API_DEAD_MARKETS_OFFSET=1997
 GAMMA_API_OLD_MARKETS_OFFSET=4750
+GAMMA_API_LAST_EVENTS_OFFSET=9760
 GAMMA_API_LAST_PIPELINE_OFFSET=37250
 CSV_OUTPUT_PATH = "data/market_prices.csv"
 TIME_COLS = ["endDate", "startDate", "closedTime"]

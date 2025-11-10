@@ -16,6 +16,9 @@ def save_to_csv(data: pd.DataFrame, output_path: Path) -> None:
     data.to_csv(output_path, index=False)
 
 def parse_market(j: dict) -> pd.Series:
+    if(j.get('clobTokenIds') is None):
+        print(f'Market {j.get("id")} has no clobTokenIds, skipping')
+        return pd.Series()
     for key in ["clobTokenIds", "outcomes", "outcomePrices"]:
         j[key] = json.loads(j[key])
      # Add derived numeric columns for clarity

@@ -82,6 +82,85 @@ def fetch_market(market_id: str) -> pd.Series:
     return parse_market(j[0])
 
 
+def fetch_categorical_winner_markets(
+    size: int = 0,
+    page: int = 500,
+    offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
+    api_filters: Optional[Dict[str, Any]] = None,
+    post_filters: Optional[Dict[Union[str, Callable[[Dict[str, Any]], bool]], bool]] = None,
+) -> pd.DataFrame | None:
+    """Fetch markets that resolved to Yes by scanning the Events endpoint.
+
+    Mirrors pagination from fetch_markets. For each event, identifies a market
+    with a winning outcome of Yes, parses it with parse_market, and collects
+    results into a DataFrame.
+    """
+    url = f"{GAMMA_API}/events"
+    winners: List[pd.Series] = []
+    page_size = page
+    api_filters = api_filters or {}
+    post_filters = post_filters or {}
+
+    while True:
+        params: Dict[str, Any] = {"limit": page_size, "offset": offset}
+        #params: Dict[str, Any] = {"id": 23246} #testing
+
+        params.update(api_filters)
+
+        r = SESSION.get(url, params=params, timeout=DEFAULT_TIMEOUT)
+        r.raise_for_status()
+        events = r.json()
+        if not events:
+            return None
+
+        for ev in events:
+            mkts = ev.get("markets") or []
+            if(len(mkts)== 1):
+                print(f'Event {ev["id"]} has only 1 market, skipping')
+                continue
+            chosen = None
+            for m in mkts:
+                idx = api_identify_market_outcome_winner_index(m)
+                if idx == YES_INDEX:
+                    print('Found winning Yes market:', m['id'])
+                    chosen = m
+                    break
+            if not chosen:
+                print(f'No winning Yes market found for event {ev["id"]}')
+                continue
+            winners.append(fetch_market(chosen['id'])) # already parsed 
+
+        if len(events) < page_size:
+            break
+
+        offset += page_size
+        if size > 0 and len(winners) >= size:
+            winners = winners[:size]
+            break
+
+    if post_filters:
+        filtered = []
+        for m in winners:
+            keep = True
+            for fn, expected in post_filters.items():
+                func = fn
+                if isinstance(fn, str):
+                    func = globals().get(fn)
+                if callable(func):
+                    if bool(func(m)) is not bool(expected):
+                        keep = False
+                        break
+            if keep:
+                filtered.append(m)
+        winners = filtered
+    print(f"Fetched {len(winners)} categorical winner markets from events offset {offset}")
+    return pd.DataFrame(winners)
+
+
+# Alias to match requested name (typo-safe)
+fetch_catogical_winner_markets = fetch_categorical_winner_markets
+
+
 
 def compute_event_market_counts(markets: pd.DataFrame) -> pd.Series:
     """Return number of distinct markets attached to each Gamma event key."""
@@ -272,7 +351,7 @@ if __name__ == "__main__":
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
 
 
-
+    categorical = fetch_categorical_winner_markets()
     tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
     
     prices['market_id'] = prices['market_id'].astype(int)

@@ -114,6 +114,56 @@ def stream_markets_to_csv(
 
     print(f"Done. Wrote {saved} rows → {out_path}")
 
+def stream_categorical_markets_to_csv(
+    limit: int|Literal['all'] = 100,
+    page_size: int = 500,
+    offset: int = 0,
+    out_path:Path = Path(f"data/categorical.csv")
+
+) -> None:
+    header_written = out_path.exists() and out_path.stat().st_size > 0
+    saved = 0
+    offset = offset
+    while True:
+        batch = fetch_categorical_winner_markets(
+            size=page_size,
+            page=page_size,
+            offset=offset,
+        )
+
+        if batch is None:
+            print(f"API empty answer. Last offset = {offset}")
+            break
+
+        # if total is an int, cap the last batch
+        if isinstance(limit, int):
+            remaining = limit - saved
+            if remaining <= 0:
+                break
+            if len(batch) > remaining:
+                batch = batch.iloc[:remaining]
+
+        # append
+        if(len(batch)>0):
+            batch.to_csv(
+                out_path,
+                mode="a",
+                header=not header_written,
+                index=False,
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            header_written = True
+
+        saved += len(batch)
+        offset += page_size                        
+        print(f"Saved batch {len(batch)} (total saved={saved}), next offset={offset}")
+
+        if isinstance(limit, int) and saved >= limit:
+            break
+
+    print(f"Done. Wrote {saved} rows → {out_path}")
+
+
 def parse_limit(s: str) -> Union[int, Literal["all"]]:
     s = s.strip().lower()
     if s == "all":
@@ -140,7 +190,12 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
+    
     if(True or args.fetch_markets):
+        stream_categorical_markets_to_csv(limit=args.limit, page_size=args.page_size)
+        return 0
+    
+    if(args.fetch_markets):
         stream_markets_to_csv(limit=args.limit, page_size=args.page_size, offset=args.offset)
         return 0
 
