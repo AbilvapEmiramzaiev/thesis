@@ -5,8 +5,8 @@ import mplcursors
 mind = 1
 maxd = 999
 amount = 0
-start = pd.Timestamp('2022-01-01T00:00:00Z')
-end = pd.Timestamp('2023-01-01T00:00:00Z')
+start = pd.Timestamp('2023-01-01T00:00:00Z')
+end = pd.Timestamp('2023-12-01T00:00:00Z')
 
 #quants aggregated APY
 q1_mark = 0.00
@@ -20,8 +20,8 @@ def prepare_apy_graphics(markets:pd.DataFrame, prices:pd.DataFrame):
     s = pd.to_datetime(markets["startDate"], utc=True, errors="coerce")
     e = pd.to_datetime(markets["endDate"], utc=True, errors="coerce")
 
-    # Select markets that overlap calendar year 2024
-    mask = (s >= start)# & (e <= end)
+    # Select markets that INSIDE calendar year 2024
+    mask = (s >= start) & (e <= end)
     yearMarkets = markets.loc[mask].copy()
 
     prices = prices.copy()
@@ -39,7 +39,7 @@ def finish_apy_graphics(yearMarkets:pd.DataFrame,
                         medians:List[float] = [],
                         ax:plt.Axes = None,
                         hoverEffect: bool = True):
-    liquidity_avg = yearMarkets['liquidityNum'].mean().round(2)
+    liquidity_avg = round(yearMarkets['liquidityNum'].mean(), 2)
     # average time to resolution (in days) for the displayed markets
     avg_res_days = pd.to_numeric(yearMarkets.get('duration_days', pd.Series(dtype=float))).mean()
     avg_res_days_str = f"{avg_res_days:.1f} days" if pd.notna(avg_res_days) else "n/a"
@@ -261,7 +261,7 @@ def graphic_apy_aggregated(
         f"{title_prefix} across {n_markets} markets\n"
         f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
     )
-   # ax.set_ylim(0.01, 0.8)
+    ax.set_ylim(0, 0.5)
     ax.set_title(title, fontsize=12, loc="center", pad=8, y=1.04)
 
     # Minimal weekly boxes with contributing market counts on the median line

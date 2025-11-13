@@ -346,11 +346,6 @@ def find_markets_without_prices(
     market_id_col: str = "id",
     price_market_col: str = "market_id",
 ) -> pd.DataFrame:
-    """Return subset of markets that have no rows in `prices`.
-
-    markets: DataFrame with an `id` column (or override via market_id_col)
-    prices:  DataFrame with a `market_id` column (or override via price_market_col)
-    """
     if market_id_col not in markets or price_market_col not in prices:
         return pd.DataFrame(columns=list(markets.columns))
 
@@ -369,10 +364,6 @@ def filter_markets_with_prices(
     market_id_col: str = "id",
     price_market_col: str = "market_id",
 ) -> pd.DataFrame:
-    """Return only markets that have at least one row in `prices`.
-
-    Keeps rows where `markets[id]` appears in `prices[market_id]` after numeric coercion.
-    """
     if market_id_col not in markets or price_market_col not in prices:
         return markets.iloc[0:0].copy()
 
@@ -380,6 +371,8 @@ def filter_markets_with_prices(
     p_ids = pd.to_numeric(prices[price_market_col], errors="coerce").astype("Int64")
     have_prices = m_ids.isin(pd.unique(p_ids.dropna()))
     return markets.loc[have_prices].copy()
+
+def ids_match(markets: pd.DataFrame, prices: pd.DataFrame) -> bool: return set(pd.to_numeric(markets['id'], errors='coerce').dropna().astype('Int64')) == set(pd.to_numeric(prices['market_id'], errors='coerce').dropna().astype('Int64'))
 
 
 
@@ -398,15 +391,9 @@ if __name__ == "__main__":
     #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
-    
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
+    print(ids_match(markets, prices))
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
-    missing = find_markets_without_prices(markets, prices)
-    print(f'Found {len(missing)} markets without prices')
-    missing.to_csv(f'{PROJECT_ROOT}/data/no_price_categorical.csv', index=False)
-    withprices = filter_markets_with_prices(markets, prices)
-    withprices.to_csv(f'{PROJECT_ROOT}/data/categorical.csv', index=False)
-    print(f'Found {len(withprices)} markets with prices')
     #categorical = fetch_categorical_winner_markets()
     tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
     
