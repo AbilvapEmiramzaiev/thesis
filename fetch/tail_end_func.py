@@ -339,6 +339,49 @@ def find_tailend_markets(markets: pd.DataFrame,
     return pd.DataFrame(tailend_markets)
 
 
+def find_markets_without_prices(
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+    *,
+    market_id_col: str = "id",
+    price_market_col: str = "market_id",
+) -> pd.DataFrame:
+    """Return subset of markets that have no rows in `prices`.
+
+    markets: DataFrame with an `id` column (or override via market_id_col)
+    prices:  DataFrame with a `market_id` column (or override via price_market_col)
+    """
+    if market_id_col not in markets or price_market_col not in prices:
+        return pd.DataFrame(columns=list(markets.columns))
+
+    m_ids = pd.to_numeric(markets[market_id_col], errors="coerce").astype("Int64")
+    p_ids = pd.to_numeric(prices[price_market_col], errors="coerce").astype("Int64")
+
+    have_prices = m_ids.isin(pd.unique(p_ids.dropna()))
+    missing = markets.loc[~have_prices].copy()
+    return missing
+
+
+def filter_markets_with_prices(
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+    *,
+    market_id_col: str = "id",
+    price_market_col: str = "market_id",
+) -> pd.DataFrame:
+    """Return only markets that have at least one row in `prices`.
+
+    Keeps rows where `markets[id]` appears in `prices[market_id]` after numeric coercion.
+    """
+    if market_id_col not in markets or price_market_col not in prices:
+        return markets.iloc[0:0].copy()
+
+    m_ids = pd.to_numeric(markets[market_id_col], errors="coerce").astype("Int64")
+    p_ids = pd.to_numeric(prices[price_market_col], errors="coerce").astype("Int64")
+    have_prices = m_ids.isin(pd.unique(p_ids.dropna()))
+    return markets.loc[have_prices].copy()
+
+
 
 
 
@@ -351,12 +394,20 @@ if __name__ == "__main__":
 
 
 
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
-    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
+    #markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
+    
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
+    
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
-
-
-    categorical = fetch_categorical_winner_markets()
+    missing = find_markets_without_prices(markets, prices)
+    print(f'Found {len(missing)} markets without prices')
+    missing.to_csv(f'{PROJECT_ROOT}/data/no_price_categorical.csv', index=False)
+    withprices = filter_markets_with_prices(markets, prices)
+    withprices.to_csv(f'{PROJECT_ROOT}/data/categorical.csv', index=False)
+    print(f'Found {len(withprices)} markets with prices')
+    #categorical = fetch_categorical_winner_markets()
     tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
     
     prices['market_id'] = prices['market_id'].astype(int)
@@ -367,8 +418,8 @@ if __name__ == "__main__":
     print(len(tailended))
     #graphic_apy_per_market(tailended, prices)
     #graphic_min_apy_line(tailended, prices)
-    #graphic_apy_aggregated(tailended, tailenedPrices)
-    graphic_apy_aggregated_many_years(tailended, tailenedPrices)
+    graphic_apy_aggregated(tailended, tailenedPrices)
+    #graphic_apy_aggregated_many_years(tailended, tailenedPrices)
 
 
     tmp = markets.copy()

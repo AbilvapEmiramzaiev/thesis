@@ -2,11 +2,11 @@ from imports import *
 from plot.plot_data import *
 import mplcursors
 
-mind = 30
+mind = 1
 maxd = 999
 amount = 0
 start = pd.Timestamp('2022-01-01T00:00:00Z')
-end = pd.Timestamp('2026-01-01T00:00:00Z')
+end = pd.Timestamp('2023-01-01T00:00:00Z')
 
 #quants aggregated APY
 q1_mark = 0.00
@@ -21,7 +21,7 @@ def prepare_apy_graphics(markets:pd.DataFrame, prices:pd.DataFrame):
     e = pd.to_datetime(markets["endDate"], utc=True, errors="coerce")
 
     # Select markets that overlap calendar year 2024
-    mask = (s >= start) & (e <= end)
+    mask = (s >= start)# & (e <= end)
     yearMarkets = markets.loc[mask].copy()
 
     prices = prices.copy()
@@ -262,7 +262,7 @@ def graphic_apy_aggregated(
         f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
     )
    # ax.set_ylim(0.01, 0.8)
-    ax.set_title(title, fontsize=12, loc="center", pad=8)
+    ax.set_title(title, fontsize=12, loc="center", pad=8, y=1.04)
 
     # Minimal weekly boxes with contributing market counts on the median line
     if show_count_markers and not apy_mat.empty:
@@ -370,9 +370,9 @@ def graphic_apy_aggregated_many_years(
         c = base_colors[i % len(base_colors)]
         ax.fill_between(q_lo.index, q_lo.values, q_hi.values, alpha=0.25, label=f"{yr}: P{int(q_lo_mark*100)}–P{int(q_hi_mark*100)}", color=c)
         ax.plot(q_md.index, q_md.values, linewidth=2, label=f"{yr}: Median (P{int(q_md_mark*100)})", color=c)
-        ax.set_ylim(0, 0.8)
+       # ax.set_ylim(0, 0.8)
         # optional per-year count markers along the median
-        if False and show_count_markers:
+        if show_count_markers:
             counts = apy_mat.loc[mask].count(axis=1).resample(marker_rule).mean().round()
             med = q_md.resample(marker_rule).median()
             for t, n in counts.dropna().items():

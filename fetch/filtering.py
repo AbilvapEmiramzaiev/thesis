@@ -10,7 +10,7 @@ def api_identify_market_outcome_winner_index(market: json) -> Optional[str]:
     outcomes = market.get("outcomePrices", [])
     outcomes = json.loads(outcomes) if isinstance(outcomes, str) else outcomes
     if not outcomes:
-        print(f'identify winner function: M-{market['id']}  with no clobTokenIds')
+        print(f"identify winner function: M-{market['id']}  with no clobTokenIds")
         return None
 
     # Find the outcome with the highest clobid
