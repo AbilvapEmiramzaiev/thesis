@@ -346,6 +346,11 @@ def find_tailend_markets(markets: pd.DataFrame,
 
 if __name__ == "__main__":
 
+    
+    
+
+
+
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))

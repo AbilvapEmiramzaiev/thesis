@@ -13,7 +13,7 @@ from fetch.tail_end_func import *
 def collect_market_prices(
     markets: pd.DataFrame,
     fidelity: int = 1440,
-    out_path:Path = Path(f"data/market_prices2.csv")
+    out_path:Path = Path(f"data/market_prices_categorical.csv")
 ,
 ) -> pd.DataFrame:
     """Fetch price history for markets and return a long DataFrame.
@@ -191,7 +191,14 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
     
-    if(True or args.fetch_markets):
+    markets = pd.read_csv('data/categorical.csv')
+    prices = collect_market_prices(
+        markets,
+        fidelity=args.fidelity,
+        out_path=args.output,
+    )
+
+    if(args.fetch_markets):
         stream_categorical_markets_to_csv(limit=args.limit, page_size=args.page_size)
         return 0
     
