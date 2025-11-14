@@ -2,11 +2,11 @@ from imports import *
 from plot.plot_data import *
 import mplcursors
 
-mind = 1
-maxd = 365
-amount = 200
+mind = 10
+maxd = 999
+amount = 0
 start = pd.Timestamp('2024-01-01T00:00:00Z')
-end = pd.Timestamp('2025-12-01T00:00:00Z')
+end = pd.Timestamp('2024-12-01T00:00:00Z')
 
 #quants aggregated APY
 q1_mark = 0.00
@@ -100,10 +100,13 @@ def graphic_apy_per_market(markets:pd.DataFrame, prices: pd.DataFrame):
             per_market_mean_apy.append(float(np.mean(apy_vals)))
             medians.append(float(np.median(apy_vals)))
     #plt.tight_layout()
-    #plt.ylim(0, 0.3) # zoom
+    plt.ylim(0, 0.5) # zoom
 
     finish_apy_graphics(yearMarkets, per_market_mean_apy, medians, ax)
-    ax.set_title(f"APY per market {start.strftime('%d/%m/%y')} - {end.strftime('%d/%m/%y')}", fontsize=12, loc="center", pad=8)  # loc: 'left'|'center'|'right'
+    ax.set_title(f"APY per market {start.strftime('%d/%m/%y')} - {end.strftime('%d/%m/%y')}", fontsize=12, loc="center", pad=8,y=1.04)  # loc: 'left'|'center'|'right'
+    #ax.set_xlim(pd.Timestamp('2024-04-01T00:00:00Z'), pd.Timestamp('2024-09-01T00:00:00Z'))
+    ax.legend().set_visible(False)
+
     plt.show()
     plt.close(fig) 
 
@@ -260,7 +263,8 @@ def graphic_apy_aggregated(
         f"{title_prefix} across {n_markets} markets\n"
         f"{start_ts.strftime('%d/%m/%y')} – {end_ts.strftime('%d/%m/%y')}"
     )
-    ax.set_ylim(0, 0.5)
+    ax.set_ylim(0, 1)
+    #ax.set_xlim(pd.Timestamp('2024-04-01T00:00:00Z'), pd.Timestamp('2024-09-01T00:00:00Z'))
     ax.set_title(title, fontsize=12, loc="center", pad=8, y=1.04)
 
     # Minimal weekly boxes with contributing market counts on the median line

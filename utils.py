@@ -95,7 +95,8 @@ def compute_market_apy_series(
     p = df[price_col].clip(1e-9, 1 - 1e-9)
     res_ts = pd.to_datetime(resolution_time, utc=True)
     dt_days = (res_ts - t).dt.total_seconds() / 86400.0
-    m = dt_days > min_days_before_res
-    apy = ((1.0 - p[m]) / p[m]) * (365.0 / dt_days[m])
+    m = dt_days > min_days_before_res #how much days before resolution to ignore
+    t, p, dt_days = t[m], p[m], dt_days[m]
+    apy = ((1.0 - p) / p) * (365.0 / dt_days)
     s = pd.Series(apy.values, index=t[m])
     return s.sort_index()

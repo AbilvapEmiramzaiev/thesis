@@ -371,7 +371,7 @@ if __name__ == "__main__":
     #clean_prices.to_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv', index=False)
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
     #categorical = fetch_categorical_winner_markets()
-    markets = markets[markets['id'] == 512342]
+    #markets = markets[(markets['id'] == 500503)]
     tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
     prices['market_id'] = prices['market_id'].astype(int)
     tailended['id'] = tailended['id'].astype(int)
