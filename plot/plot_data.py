@@ -65,7 +65,8 @@ def add_market_apy_line(
     m = dt_days > 3.0 #how much days before resolution to ignore
     t, p, dt_days = t[m], p[m], dt_days[m]
     apy = ((1.0 - p) / p) * (365.0 / dt_days)
-
+    #t.to_csv('debug_times.csv', index=False)
+    #apy.to_csv('debug_apy.csv', index=False)
     ax2 = ax2 or ax.twinx()
     ax2.plot(t, apy, linewidth=linewidth, label=label, alpha=alpha)
     ax2.set_ylabel("annualized yield (*100%)")

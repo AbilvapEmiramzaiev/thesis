@@ -251,32 +251,6 @@ def fetch_market_prices_history(startDate: str, clobTokenId: str, fidelity: int 
     df = df.sort_values("t").reset_index(drop=True)
     return df
 
-
-
-
-def _prepare_price_series(
-    prices: pd.DataFrame,
-    price_col: str = "p",
-    ts_col: str = "t"
-) -> pd.DataFrame:
-    """Return prices with UTC timestamps sorted ascending."""
-    if ts_col not in prices.columns or price_col not in prices.columns:
-        raise ValueError(f"prices must contain '{ts_col}' and '{price_col}' columns")
-
-    df = prices[[ts_col, price_col]].dropna().copy()
-    if df.empty:
-        return df
-
-    ts = df[ts_col]
-    if np.issubdtype(ts.dtype, np.number):
-        df["_ts"] = pd.to_datetime(ts, unit='s', utc=True, errors="coerce")
-    else:
-        df["_ts"] = pd.to_datetime(ts, utc=True, errors="coerce")
-
-    df = df.dropna(subset=["_ts"]).sort_values("_ts").reset_index(drop=True)
-    return df
-
-
 def is_strictly_tailend_market(market_prices: pd.DataFrame, low=0.10, high=0.90) -> bool:
     """A market is tail-end if either outcome is ever below `low` or above `high`."""
     return (market_prices['price'].le(low).any() or market_prices['price'].ge(high).any())
@@ -376,36 +350,39 @@ def ids_match(markets: pd.DataFrame, prices: pd.DataFrame) -> bool: return set(p
 
 
 
-
+def clear_dublicates(data: pd.DataFrame, column: List[str]) -> pd.DataFrame:
+    before = len(data)
+    clean = data.drop_duplicates(subset=column, keep='first')
+    after = len(clean)
+    print(f'Cleared {before - after} duplicated markets')
+    return clean
 
 
 
 if __name__ == "__main__":
-
-    
-    
-
-
-
     #markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
     #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
-    print(ids_match(markets, prices))
+    # Number of duplicated IDs (excluding the first occurrence)
+    #print(markets['id'].duplicated().sum())
+    #clean_prices = clear_dublicates(prices, ['market_id', 't', 'p'])
+    #clean_prices.to_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv', index=False)
     #tailended = filter_by_timeframe(markets, end_ts=pd.Timestamp('2024-12-31T12:59:59Z'))
     #categorical = fetch_categorical_winner_markets()
+    markets = markets[markets['id'] == 512342]
     tailended = find_tailend_markets(markets, prices, TAILEND_PERCENT, TAILEND_RATE)
-    
     prices['market_id'] = prices['market_id'].astype(int)
     tailended['id'] = tailended['id'].astype(int)
     tailenedPrices = prices[prices['market_id'].isin(markets['id'])]
-    
-    
+    print(tailenedPrices['t'].is_monotonic_increasing)
+    if(tailended.empty):
+        sys.exit('No tail-end markets found')
     print(len(tailended))
-    #graphic_apy_per_market(tailended, prices)
+    graphic_apy_per_market(tailended, tailenedPrices)
     #graphic_min_apy_line(tailended, prices)
-    graphic_apy_aggregated(tailended, tailenedPrices)
+    #graphic_apy_aggregated(tailended, tailenedPrices)
     #graphic_apy_aggregated_many_years(tailended, tailenedPrices)
 
 
