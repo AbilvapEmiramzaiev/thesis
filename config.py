@@ -80,3 +80,4 @@ CSV_OUTPUT_PATH = "data/market_prices.csv"
 TIME_COLS = ["endDate", "startDate", "closedTime"]
 TAILEND_PERCENT=0.9
 TAILEND_RATE=0.6
+TAILEND_LOSER_PRICE=0.2

@@ -3,7 +3,7 @@ from typing import Optional
 import pandas as pd
 from datetime import datetime
 from typing import Tuple
-
+from config import TAILEND_LOSER_PRICE, TAILEND_RATE
 def api_identify_market_outcome_winner_index(market: json) -> Optional[str]:
     """Identify the winning outcome of a market using the clobid field."""
     tol = 1e-3
@@ -71,12 +71,36 @@ def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) ->
 
     return markets[mask]
 
+def filter_losser_tailend_markets(
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    tailend_market_ids = []
+
+    for market_id in prices["market_id"].unique():
+        market_prices = prices[prices["market_id"] == market_id]
+        if filter_losser_prices(market_prices):
+            tailend_market_ids.append(market_id)
+    
+    filtered_markets = markets[markets["id"].isin(tailend_market_ids)].copy()
+
+    filtered_prices = prices[prices["market_id"].isin(tailend_market_ids)].copy()
+    filtered_prices["p"] = 1 - filtered_prices["p"]
+
+    return filtered_markets, filtered_prices
+
+def filter_losser_prices(
+        prices: pd.DataFrame,
+    ) -> bool:
+    return not is_prices_above_then(prices, threshold=TAILEND_LOSER_PRICE, required_pct=TAILEND_RATE)
+
+ 
   
 def is_prices_above_then(
     prices: pd.DataFrame,
-    threshold: float = 0.80,
-    required_pct: float = 0.60,
-) -> Tuple[bool, float]:
+    threshold: float = TAILEND_LOSER_PRICE,
+    required_pct: float = TAILEND_RATE,
+) -> bool:
     cond = (prices["p"] >= threshold)
     frac = cond.mean()
     return frac >= required_pct

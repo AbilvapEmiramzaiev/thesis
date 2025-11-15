@@ -357,14 +357,20 @@ def clear_dublicates(data: pd.DataFrame, column: List[str]) -> pd.DataFrame:
     print(f'Cleared {before - after} duplicated markets')
     return clean
 
+def create_lossers_csv(markets: pd.DataFrame, prices: pd.DataFrame) -> None:
+    wrong_tail_end, losser_prices = filter_losser_tailend_markets(markets=markets, prices=prices)    
+    print('Losser tail-end markets found:', len(wrong_tail_end))
+    wrong_tail_end.to_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv', index=False)
+    losser_prices.to_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv', index=False)
 
 
 if __name__ == "__main__":
-    #markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
-    #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
-    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
+    #create_lossers_csv(markets, prices)
+    #markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
+    #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
     # Number of duplicated IDs (excluding the first occurrence)
     #print(markets['id'].duplicated().sum())
     #clean_prices = clear_dublicates(prices, ['market_id', 't', 'p'])
