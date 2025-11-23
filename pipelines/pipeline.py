@@ -13,7 +13,7 @@ from fetch.tail_end_func import *
 def collect_market_prices(
     markets: pd.DataFrame,
     fidelity: int = 1440,
-    out_path:Path = Path(f"data/market_prices_categorical.csv")
+    out_path:Path = Path(f"data/binary_yes_p.csv")
 ,
 ) -> pd.DataFrame:
     """Fetch price history for markets and return a long DataFrame.
@@ -30,8 +30,10 @@ def collect_market_prices(
     #records: List[pd.DataFrame] = []
     for _, market in markets.iterrows():
         try:
-            index = get_market_winner_clobTokenId(market)
-            prices = fetch_market_prices_history(market['startDate'], index, fidelity=fidelity)
+            #index = get_market_winner_clobTokenId(market)
+            #prices = fetch_market_prices_history(market['startDate'], index, fidelity=fidelity)
+
+            prices = fetch_market_prices_history(market['startDate'], market['clobTokenIdYes'], fidelity=fidelity)
         except Exception as exc:
             print(f"Failed to fetch prices for {market['id']}: {exc}", file=sys.stderr)
             continue
@@ -182,7 +184,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     )
     parser.add_argument("--page-size", dest="page_size", type=int, default=500, help="Page size for each markets fetch")
     parser.add_argument("--offset", type=int, default=GAMMA_API_DEAD_MARKETS_OFFSET, help="Initial offset for pagination")
-    parser.add_argument("--fidelity", type=int, default=1440, help="Fidelity passed to prices-history endpoint")
+    parser.add_argument("--fidelity", type=int, default=500, help="Fidelity passed to prices-history endpoint")
     parser.add_argument("--token-index", type=int, default=YES_INDEX, help="Outcome index to download prices for")
     parser.add_argument("--plot-market", help="Optional market id to plot after collection")
     return parser.parse_args(argv)

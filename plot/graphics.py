@@ -408,3 +408,25 @@ def graphic_apy_aggregated_many_years(
 
     plt.show()
     plt.close(fig)
+
+
+
+def graphic_calibration(df: pd.DataFrame, x_line:str, y_line:str):
+    fig, ax = plt.subplots()
+
+    # model calibration
+    ax.plot(
+        df[x_line],
+        df[y_line],
+        marker="s",
+        linestyle="-",
+        label="markets"
+    )
+
+    ax.plot([0, 1], [0, 1], linestyle="--", label="perfectly calibrated")
+
+    ax.set_xlabel("Mean predicted value")
+    ax.set_ylabel("Fraction of positives")
+    ax.set_title("Calibration plot (Reliability curve)")
+    ax.legend()
+    plt.show()
