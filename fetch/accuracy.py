@@ -250,8 +250,6 @@ def accuracy_relative_brier():
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/test.csv')
     prices['outcome'] = 1
-    tailended = markets
-    tailended = find_tailend_markets(markets,prices)
    
     markets_lossers = read_markets_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv')
     prices_lossers = pd.read_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv')
@@ -260,7 +258,7 @@ def accuracy_relative_brier():
     #markets = markets[markets['id'] == 530684]
     #prices_lossers = prices_lossers[prices_lossers['market_id'] == 513494]
     #markets_lossers = markets_lossers[markets_lossers['id'] == 528366]
-
+    
     all_markets = (
         pd.concat([
             markets_lossers,    
@@ -273,46 +271,21 @@ def accuracy_relative_brier():
             prices[~prices['market_id'].isin(prices_lossers['market_id'])]
         ], ignore_index=True)
     )  
-    print(relative_brier(all_prices, all_markets, 14)['relative_brier'].mean())
+    tailended = find_tailend_markets(all_markets, all_prices)
+    tailended.to_csv('d.csv')
+    print(relative_brier(all_prices, tailended, 14)['relative_brier'].mean())
 
 
     
 
 if __name__ == "__main__":
    
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
-    prices = pd.read_csv(f'{PROJECT_ROOT}/data/test.csv')
-    prices['outcome'] = 1
-    tailended = markets
-    #tailended = find_tailend_markets(markets,prices)
-   
-    markets_lossers = read_markets_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv')
-    prices_lossers = pd.read_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv')
-    prices_lossers['outcome'] = 0
-    prices = prices[prices['market_id'] == 530873]
-    #markets = markets[markets['id'] == 530684]
-    prices_lossers = prices_lossers[prices_lossers['market_id'] == 513494]
-    #markets_lossers = markets_lossers[markets_lossers['id'] == 528366]
-
-    all_markets = (
-        pd.concat([
-            markets_lossers,    
-            markets[~markets['id'].isin(markets_lossers['id'])]
-        ], ignore_index=True)
-    )
-    all_prices = (
-        pd.concat([
-            prices_lossers,    
-            prices[~prices['market_id'].isin(prices_lossers['market_id'])]
-        ], ignore_index=True)
-    )  
     #metrics_all = evaluate_markets(all_prices)
     """ accuracy_all_markets(
         f'{PROJECT_ROOT}/data/categorical.csv',
         f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
     ) """
-
-    print(relative_brier(all_prices, all_markets, 14)['relative_brier'].mean())
+    accuracy_relative_brier()
 
     sys.exit(0)
     # Evaluate losers subset
