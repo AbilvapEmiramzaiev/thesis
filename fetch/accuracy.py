@@ -8,6 +8,7 @@ if __package__ in (None, ""):
 from imports import *
 from plot.plot_data import *
 from plot.graphics import *
+from fetch.tail_end_func import find_tailend_markets
 
 def brier_score(probs: Iterable[float], labels: Iterable[int]) -> float:
     p = np.asarray(list(probs), dtype=float)
@@ -67,7 +68,46 @@ def derive_outcome_yes(markets: pd.DataFrame) -> pd.DataFrame:
     out = out.reset_index(drop=True)
     return out
 
+def relative_brier(prices, markets, days, p_col="p", outcome_col="outcome"):
+    #works correct tested 24.11
+    prices = df_time_to_datetime(prices, 't')
 
+
+    df = prices.merge(
+        markets[["id", "prob_yes"]].rename(columns={"id": "market_id"}),
+        on="market_id",
+        how="inner"
+    )
+    if outcome_col not in df.columns:
+        df[outcome_col] = (df["prob_yes"] == 1.0).astype(int)
+
+
+    df = (
+        df.sort_values("t")
+          .groupby("market_id")
+          .tail(days)  
+          .reset_index(drop=True)
+    )
+
+    # Create day index (e.g., days before resolve)
+    df["day"] = df.groupby("market_id")["t"].transform(
+        lambda x: (x.max() - x).dt.days
+    )
+
+    # Compute daily Brier scores
+    df["relative_brier"] = (df[p_col] - df[outcome_col])**2
+
+
+    # Step 4: sum across all days each market existed
+    summed_brier_score = df.groupby("market_id")["relative_brier"].sum()
+
+    # Step 5: divide by total days for that market
+    #total_days = df.groupby("market_id")["day"].nunique()
+
+    result = (summed_brier_score / (days)).reset_index()
+    result.columns = ["market_id", "relative_brier"]
+
+    return result
 
 def evaluate_markets(
     prices: pd.DataFrame,
@@ -75,10 +115,6 @@ def evaluate_markets(
     market_col_prices: str = "market_id",
 ) -> Tuple[Dict[str, float], pd.DataFrame]:
     #Tested, calculates correctly
-    """Compute accuracy, Brier, and log-loss by merging last p with outcomes.
-    Returns (metrics_dict, merged_frame) where `merged_frame` has columns
-    [market_id, p_last, outcome_yes] for the joined markets.
-    """
     p = (
         prices.sort_values("t")               # sort so last is latest
             .groupby("market_id")
@@ -209,38 +245,75 @@ def accuracy_all_markets(
     metrics_all = evaluate_markets_bucketed(withOutcome)
     graphic_calibration(metrics_all, 'mean_pred', 'freq_pos')
     print(metrics_all)
+
+def accuracy_relative_brier():
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/test.csv')
+    prices['outcome'] = 1
+    tailended = markets
+    tailended = find_tailend_markets(markets,prices)
    
+    markets_lossers = read_markets_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv')
+    prices_lossers = pd.read_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv')
+    prices_lossers['outcome'] = 0
+    #prices = prices[prices['market_id'] == 530873]
+    #markets = markets[markets['id'] == 530684]
+    #prices_lossers = prices_lossers[prices_lossers['market_id'] == 513494]
+    #markets_lossers = markets_lossers[markets_lossers['id'] == 528366]
+
+    all_markets = (
+        pd.concat([
+            markets_lossers,    
+            markets[~markets['id'].isin(markets_lossers['id'])]
+        ], ignore_index=True)
+    )
+    all_prices = (
+        pd.concat([
+            prices_lossers,    
+            prices[~prices['market_id'].isin(prices_lossers['market_id'])]
+        ], ignore_index=True)
+    )  
+    print(relative_brier(all_prices, all_markets, 14)['relative_brier'].mean())
+
 
     
 
 if __name__ == "__main__":
    
-    
-    """     prices = prices[prices['market_id'] == 530684]
-        markets = markets[markets['id'] == 530684]
-        prices_lossers = prices_lossers[prices_lossers['market_id'] == 528366]
-        markets_lossers = markets_lossers[markets_lossers['id'] == 528366]
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/test.csv')
+    prices['outcome'] = 1
+    tailended = markets
+    #tailended = find_tailend_markets(markets,prices)
+   
+    markets_lossers = read_markets_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv')
+    prices_lossers = pd.read_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv')
+    prices_lossers['outcome'] = 0
+    prices = prices[prices['market_id'] == 530873]
+    #markets = markets[markets['id'] == 530684]
+    prices_lossers = prices_lossers[prices_lossers['market_id'] == 513494]
+    #markets_lossers = markets_lossers[markets_lossers['id'] == 528366]
 
-        all_markets = (
-            pd.concat([
-                markets_lossers,    
-                markets[~markets['id'].isin(markets_lossers['id'])]
-            ], ignore_index=True)
-        )
-        all_prices = (
-            pd.concat([
-                prices_lossers,    
-                prices[~prices['market_id'].isin(prices_lossers['market_id'])]
-            ], ignore_index=True)
-        )    all_prices.to_csv('dbg_p.csv')
-        #outcomes = derive_outcome_yes(all_markets) # find where YES/NO to understand what token prices represent
-    """
-
+    all_markets = (
+        pd.concat([
+            markets_lossers,    
+            markets[~markets['id'].isin(markets_lossers['id'])]
+        ], ignore_index=True)
+    )
+    all_prices = (
+        pd.concat([
+            prices_lossers,    
+            prices[~prices['market_id'].isin(prices_lossers['market_id'])]
+        ], ignore_index=True)
+    )  
     #metrics_all = evaluate_markets(all_prices)
-    accuracy_all_markets(
+    """ accuracy_all_markets(
         f'{PROJECT_ROOT}/data/categorical.csv',
         f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
-    )
+    ) """
+
+    print(relative_brier(all_prices, all_markets, 14)['relative_brier'].mean())
+
     sys.exit(0)
     # Evaluate losers subset
     loser_ids = pd.to_numeric(markets_lossers.get("id", pd.Series(dtype="Int64")), errors="coerce").astype("Int64")

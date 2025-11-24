@@ -100,3 +100,8 @@ def compute_market_apy_series(
     apy = ((1.0 - p) / p) * (365.0 / dt_days)
     s = pd.Series(apy.values, index=t[m])
     return s.sort_index()
+
+
+def df_time_to_datetime(df, column):
+    df[column] = pd.to_datetime(df[column], unit='s', utc=True,  errors="coerce")
+    return df

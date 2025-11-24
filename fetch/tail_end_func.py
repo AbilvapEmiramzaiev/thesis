@@ -297,8 +297,8 @@ def fetch_all_market_prices(market_id: str) -> pd.DataFrame:
   
 def find_tailend_markets(markets: pd.DataFrame,
                         prices: pd.DataFrame,
-                        threshold: float = 0.90,
-                        percent: float = 0.60) -> pd.DataFrame:
+                        threshold: float = TAILEND_PERCENT,
+                        percent: float = TAILEND_RATE) -> pd.DataFrame:
     tailend_markets = []
     markets['id'] = pd.to_numeric(markets['id'], errors='coerce').astype('Int64')
 
