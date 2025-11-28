@@ -68,7 +68,6 @@ def filter_by_duration(df: pd.DataFrame, min_days: int, max_days: int = None) ->
         mask = (duration >= threshold)
     markets["t_resolve"] = t_resolve
     markets["duration_days"] = duration.dt.days
-
     return markets[mask]
 
 def filter_losser_tailend_markets(

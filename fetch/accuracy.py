@@ -10,6 +10,8 @@ from plot.plot_data import *
 from plot.graphics import *
 from fetch.tail_end_func import find_tailend_markets
 
+DAYS_BEFORE = 1
+
 def brier_score(probs: Iterable[float], labels: Iterable[int]) -> float:
     p = np.asarray(list(probs), dtype=float)
     y = np.asarray(list(labels), dtype=float)
@@ -128,13 +130,29 @@ def evaluate_markets(
         "log_loss": log_loss(p["p"], p["outcome"]),
     }
     return metrics
-def pick_24h_before(group: pd.DataFrame) -> pd.Series:
-    t_last = group["t"].max()
-    target = t_last - pd.Timedelta(days=1)
 
-    # ищем строку с t, максимально близким к target
-    idx = (group["t"] - target).abs().idxmin()
-    return group.loc[idx]
+def pick_24h_before(
+    group: pd.DataFrame,
+    days_before: float = DAYS_BEFORE,
+    resolve_col: str = "resolve_time",
+) -> pd.Series:
+    resolve_time = None
+    if resolve_col in group.columns:
+        resolve_time = pd.to_datetime(group[resolve_col].iloc[0], utc=True, errors="coerce")
+    if pd.isna(resolve_time):
+        resolve_time = group["t"].max()
+
+    target = resolve_time - pd.Timedelta(days=days_before)
+    group_sorted = group.sort_values("t")
+    before_target = group_sorted[group_sorted["t"] <= target]
+
+    if before_target.empty:
+        fallback = group_sorted.iloc[0].copy()
+        if "p" in fallback:
+            fallback["p"] = np.nan
+        return fallback
+
+    return before_target.iloc[-1]
 
 def evaluate_markets_bucketed(
     prices: pd.DataFrame,
@@ -142,24 +160,17 @@ def evaluate_markets_bucketed(
     market_col_prices: str = "market_id",
     p_col: str = "p",
     outcome_col: str = "outcome",
+    days_before: float = DAYS_BEFORE,
     # default buckets: (0.80, 0.85, 0.90) etc., expressed as probabilities
     bins: Iterable[float] = (0.0, 0.80, 0.85, 0.90, 0.95, 1.0),
 ) -> pd.DataFrame:
-    """
-    Like `evaluate_markets`, but groups markets by their final probability
-    into buckets (e.g. 0.80–0.85–0.90) and computes metrics per bucket.
-
-    Returns a DataFrame with one row per bucket containing:
-      [bucket, p_min, p_max, n, accuracy@0.5, brier, log_loss]
-    """
     p = (
         prices.sort_values("t")
         .groupby(market_col_prices)
-        .apply(pick_24h_before)
+        .apply(lambda group: pick_24h_before(group, days_before=days_before))
         #.tail(1)
         .reset_index(drop=True)
     )
-    p.to_csv('b.csv')
     # ensure we work on numeric arrays
     probs = pd.to_numeric(p[p_col], errors="coerce")
     labels = pd.to_numeric(p[outcome_col], errors="coerce")
@@ -186,6 +197,7 @@ def evaluate_markets_bucketed(
             continue
         g_probs = group[p_col].to_numpy(dtype=float)
         g_labels = group[outcome_col].to_numpy(dtype=int)
+        #group.to_csv(f'props-{interval}') #TODO: THIS IS NICE DEBUGGING
         rows.append(
             {
                 "bucket": str(interval),
@@ -233,17 +245,24 @@ def accuracy_all_markets(
     pricesPath=f'{PROJECT_ROOT}/data/binary_yes_prices.csv'
 ):
     markets = read_markets_csv(marketPath)
+    marketsForResolution = filter_by_duration(markets, DAYS_BEFORE)
     prices = pd.read_csv(pricesPath)
     prices["t"] = pd.to_datetime(prices["t"],unit="s", utc=True)
     withOutcome = prices.merge(
-        markets[['id', 'prob_yes']],
+        marketsForResolution[['id', 'prob_yes', 't_resolve']],
         left_on='market_id',
         right_on='id'
     )
+    withOutcome = withOutcome.rename(columns={"t_resolve": "resolve_time"})
+    withOutcome["resolve_time"] = pd.to_datetime(withOutcome["resolve_time"], utc=True, errors="coerce")
     withOutcome['outcome'] = (withOutcome['prob_yes'] == 1.0).astype(int)
+    grouped_outcomes = withOutcome.groupby('market_id')['outcome'].max()
+    n_true = int(grouped_outcomes.sum())
+    n_false = int(len(grouped_outcomes) - n_true)
   
     metrics_all = evaluate_markets_bucketed(withOutcome)
-    graphic_calibration(metrics_all, 'mean_pred', 'freq_pos')
+    legend_extra = f"yes={n_true}, no={n_false}\n days before resolution = {DAYS_BEFORE}"
+    graphic_calibration(metrics_all, 'mean_pred', 'freq_pos', 'n', legend_extra=legend_extra)
     print(metrics_all)
 
 def accuracy_relative_brier():
@@ -280,12 +299,11 @@ def accuracy_relative_brier():
 
 if __name__ == "__main__":
    
-    #metrics_all = evaluate_markets(all_prices)
-    """ accuracy_all_markets(
-        f'{PROJECT_ROOT}/data/categorical.csv',
-        f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
-    ) """
-    accuracy_relative_brier()
+    accuracy_all_markets(
+     #   f'{PROJECT_ROOT}/data/categorical.csv',
+     #   f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
+    ) 
+    #accuracy_relative_brier()
 
     sys.exit(0)
     # Evaluate losers subset

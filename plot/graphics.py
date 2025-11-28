@@ -411,17 +411,37 @@ def graphic_apy_aggregated_many_years(
 
 
 
-def graphic_calibration(df: pd.DataFrame, x_line:str, y_line:str):
+def graphic_calibration(
+    df: pd.DataFrame,
+    x_line: str,
+    y_line: str,
+    count_col: str | None = None,
+    legend_extra: str | None = None,
+):
     fig, ax = plt.subplots()
 
     # model calibration
-    ax.plot(
-        df[x_line],
-        df[y_line],
-        marker="s",
-        linestyle="-",
-        label="markets"
-    )
+    label = "markets"
+    if legend_extra:
+        label = f"{label} \n({legend_extra})"
+    line = ax.plot(df[x_line], df[y_line], marker="s", linestyle="-", label=label)[0]
+
+    if count_col and count_col in df.columns:
+        counts = df[count_col].fillna(0)
+        max_count = max(counts.max(), 1)
+        sizes = 50 + (counts / max_count) * 150  # scale marker size
+        scatter = ax.scatter(df[x_line], df[y_line], s=sizes, color=line.get_color(), alpha=0.4, edgecolor="none", label=f"{count_col} size")
+        for x, y, c in zip(df[x_line], df[y_line], counts):
+            ax.text(
+                x,
+                y,
+                f"{int(c)}",
+                fontsize=8,
+                ha="center",
+                va="center",
+                color="white",
+                bbox=dict(boxstyle="round,pad=0.2", fc="#1f77b4", ec="none"),
+            )
 
     ax.plot([0, 1], [0, 1], linestyle="--", label="perfectly calibrated")
 
