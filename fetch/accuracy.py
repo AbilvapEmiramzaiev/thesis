@@ -261,8 +261,23 @@ def accuracy_all_markets(
     n_false = int(len(grouped_outcomes) - n_true)
   
     metrics_all = evaluate_markets_bucketed(withOutcome)
+    
+    #metrics_1w = evaluate_markets_bucketed(withOutcome, days_before=7)
+    #metrics_1m = evaluate_markets_bucketed(withOutcome,days_before=30)
+    #metrics_3m = evaluate_markets_bucketed(withOutcome,days_before=90)
+
     legend_extra = f"yes={n_true}, no={n_false}\n days before resolution = {DAYS_BEFORE}"
-    graphic_calibration(metrics_all, 'mean_pred', 'freq_pos', 'n', legend_extra=legend_extra)
+    fig, ax = plt.subplots()
+    # TODO: One line case
+    plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', count_col='n', legend_extra=legend_extra)
+    
+    #TODO: different lines case
+    #plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', label=f'martkets 1day')
+    #plot_calibration_line(ax, metrics_1w, 'mean_pred', 'freq_pos', label=f'martkets 1week')
+    #plot_calibration_line(ax, metrics_1m, 'mean_pred', 'freq_pos', label=f'martkets 1month')
+    #plot_calibration_line(ax, metrics_3m, 'mean_pred', 'freq_pos', label=f'martkets 3month')
+
+    graphic_calibration(ax)
     print(metrics_all)
 
 def accuracy_relative_brier():
