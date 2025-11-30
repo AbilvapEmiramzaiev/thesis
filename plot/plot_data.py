@@ -49,15 +49,7 @@ def add_market_apy_line(
     alpha: float = 0.9,
     ax2: Optional[plt.Axes] = None,
 ):
-    """Overlay APY line for a single market's price series on an existing plot.
-
-    APY = ((1 - p) / p) * (365 / days_to_resolution)
-
-    Pass the same `ax` across calls to stack multiple APY lines on one figure.
-    Optionally pass an existing right axis `ax2` to reuse the same secondary y-axis.
-    Returns a tuple (ax2, apy_values) where `apy_values` is a 1D numpy array
-    of computed APY values after masking (e.g., excluding last 3 days).
-    """
+    
     t = pd.to_datetime(prices[ts_col], unit="s", utc=True)
     p = prices[price_col].clip(1e-9, 1 - 1e-9)
     res_ts = pd.to_datetime(resolution_time, utc=True)

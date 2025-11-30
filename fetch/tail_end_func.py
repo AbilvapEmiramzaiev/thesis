@@ -14,7 +14,7 @@ def fetch_markets(
     page: int = 500,
     offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
     api_filters: Optional[Dict[str, Any]] = None,
-    post_filters: Optional[List[Callable[[Dict[str, Any]], bool]]] = None,
+    post_filters: Optional[Dict[Union[str, Callable[[Dict[str, Any]], bool]], bool]] = None,
 ) -> pd.DataFrame|None:
     """Fetch multiple markets from Polymarket Gamma API, returns DataFrame.
     - `api_filters`: dict of query params to add to the API call.
@@ -26,7 +26,7 @@ def fetch_markets(
     page_size = page
 
     api_filters = api_filters or {}
-    post_filters = post_filters or []
+    post_filters = post_filters or {}
 
     while True:
         params: Dict[str, Any] = {"limit": page_size, "offset": offset}
@@ -59,42 +59,55 @@ def fetch_markets(
         filtered = []
         for m in all_markets:
             keep = True
-            for fn, result in post_filters.items():
+            for fn, expected in post_filters.items():
+                func = fn
                 if isinstance(fn, str):
-                    fn = globals().get(fn)
-                if fn(m) is not result:
+                    func = globals().get(fn)
+                if not callable(func):
+                    print(f"post_filter {fn} is not callable")
+                if bool(func(m)) is not bool(expected):
                     keep = False
                     break
-            if keep:
-                filtered.append(m)
-        all_markets = filtered
-    print(f"Fetched {len(all_markets)} markets from offset {offset}")
-    return pd.DataFrame(all_markets)
+                if keep:
+                    filtered.append(m)
+                time.sleep(0.05)
+        print(f"Fetched {len(filtered)} markets from offset {offset}")
+        return pd.DataFrame(filtered)
+    else:
+        print(f"Fetched {len(all_markets)} markets from offset {offset}")
+        return pd.DataFrame(all_markets)
 
 
-def fetch_market(market_id: str) -> pd.Series:
-    r = requests.get(
+def fetch_market(market_id: str, retries: int = 3, delay: float = 3.0) -> Optional[pd.Series]:
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(
                 f"{GAMMA_API}/markets",
                 params={"id": market_id, "limit": 1},
-            )  
-    r.raise_for_status()
-    j = r.json()
-    return parse_market(j[0])
+                timeout=DEFAULT_TIMEOUT,
+            )
+            r.raise_for_status()
+            j = r.json()
+            if not j:
+                print(f"No market found for id {market_id}, skipping")
+                return None
+            return parse_market(j[0])
+        except requests.exceptions.RequestException as exc:
+            print(f"fetch_market error for {market_id} (attempt {attempt}/{retries}): {exc}")
+            if attempt == retries:
+                print(f"Giving up on market {market_id}")
+                return None
+            time.sleep(delay * attempt)
 
 
-def fetch_categorical_winner_markets(
+def fetch_categorical_markets(
     size: int = 0,
     page: int = 500,
     offset: int = GAMMA_API_DEAD_MARKETS_OFFSET,
     api_filters: Optional[Dict[str, Any]] = None,
     post_filters: Optional[Dict[Union[str, Callable[[Dict[str, Any]], bool]], bool]] = None,
+    shouldFetchWinners: bool = True
 ) -> pd.DataFrame | None:
-    """Fetch markets that resolved to Yes by scanning the Events endpoint.
-
-    Mirrors pagination from fetch_markets. For each event, identifies a market
-    with a winning outcome of Yes, parses it with parse_market, and collects
-    results into a DataFrame.
-    """
     url = f"{GAMMA_API}/events"
     winners: List[pd.Series] = []
     page_size = page
@@ -121,14 +134,24 @@ def fetch_categorical_winner_markets(
             chosen = None
             for m in mkts:
                 idx = api_identify_market_outcome_winner_index(m)
-                if idx == YES_INDEX:
+                if idx == YES_INDEX and shouldFetchWinners:
                     print('Found winning Yes market:', m['id'])
                     chosen = m
+                    market_data = fetch_market(chosen['id'])
+                    if market_data is not None:
+                        winners.append(market_data) # already parsed 
                     break
+                elif not shouldFetchWinners:
+                    chosen = m
+                    market_data = fetch_market(chosen['id'])
+                    if market_data is not None:
+                        winners.append(market_data) # already parsed 
+            
             if not chosen:
                 print(f'No winning Yes market found for event {ev["id"]}')
                 continue
-            winners.append(fetch_market(chosen['id'])) # already parsed 
+
+            
 
         if len(events) < page_size:
             break
@@ -158,7 +181,7 @@ def fetch_categorical_winner_markets(
 
 
 # Alias to match requested name (typo-safe)
-fetch_catogical_winner_markets = fetch_categorical_winner_markets
+fetch_catogical_winner_markets = fetch_categorical_markets
 
 
 
@@ -244,7 +267,7 @@ def fetch_market_prices_history(startDate: str, clobTokenId: str, fidelity: int 
     )
     r.raise_for_status()
     all_rows = r.json()['history']
-    print('Fetched', len(all_rows), 'price points for market', clobTokenId[:3], '...',clobTokenId[-3:], ' ', startTs)
+    print('Fetched\t', len(all_rows), 'price points for market', clobTokenId[:3], '...',clobTokenId[-3:], ' ', startTs)
     if not all_rows:
         return pd.DataFrame()
     df = pd.json_normalize(all_rows)
@@ -366,7 +389,10 @@ def create_lossers_csv(markets: pd.DataFrame, prices: pd.DataFrame) -> None:
 
 if __name__ == "__main__":
     
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/binary_markets.csv')
+    normalized = normalize_time(markets)
+    normalized.to_csv(Path('data/binary_normalized.csv'), index=False) 
+   
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     #create_lossers_csv(markets, prices)
     #markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
@@ -439,9 +465,7 @@ if __name__ == "__main__":
     #print(filter_by_timeframe(markets, start, end))
     #for min in range(0,100,5):
     #    print(f'Amount of markets with duration {min}-{min+5} days is {len(filter_by_duration(markets, min, min+5))}')
-    #normalized = normalize_time(markets)
-    #normalized.to_csv(Path('data/test_pipeline.csv'), index=False) 
-    #save_to_csv(market.to_frame().T, Path('data/market.csv'))
+     #save_to_csv(market.to_frame().T, Path('data/market.csv'))
     #print(market.head(), type(market))
     #print(is_single_market_event(market[0]))
     """print(identify_market_outcome_winner_index(market))

@@ -57,7 +57,7 @@ def make_session() -> requests.Session:
     return s
 
 SESSION = make_session()
-DEFAULT_TIMEOUT = (5, 30)
+DEFAULT_TIMEOUT = (7, 40)
 
 # Constants
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -75,7 +75,7 @@ CLOB_FIDELITY_TIME='m'
 GAMMA_API_DEAD_MARKETS_OFFSET=1997
 GAMMA_API_OLD_MARKETS_OFFSET=4750
 GAMMA_API_LAST_EVENTS_OFFSET=9760
-GAMMA_API_LAST_PIPELINE_OFFSET=37250
+GAMMA_API_LAST_PIPELINE_OFFSET=73920#98900
 CSV_OUTPUT_PATH = "data/market_prices.csv"
 TIME_COLS = ["endDate", "startDate", "closedTime"]
 TAILEND_PERCENT=0.8
