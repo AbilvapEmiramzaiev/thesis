@@ -102,6 +102,18 @@ def read_markets_csv(path: Path, columns: list[str] | None = None) -> pd.DataFra
 
     return df
 
+def read_prices_csv(path: Path) -> pd.DataFrame:
+    prices = pd.read_csv(
+        path,
+        low_memory=False,                          
+        dtype={"market_id": "string", "token": "string"} 
+    )
+    
+    prices["market_id"] = pd.to_numeric(prices["market_id"], errors="coerce").astype("Int64")
+    prices["p"] = pd.to_numeric(prices["p"], errors="coerce")
+    prices = prices.dropna(subset=["market_id", "p", "token"])
+    prices["token"] = prices["token"].str.lower().str.strip() 
+    return prices
 
 def compute_market_apy_series(
     df: pd.DataFrame,
