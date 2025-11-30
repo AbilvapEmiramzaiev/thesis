@@ -72,10 +72,35 @@ def normalize_time(markets: pd.DataFrame) -> pd.DataFrame:
     return markets
     
 
-def read_markets_csv(path: Path) -> pd.DataFrame:
-    utc_conv = lambda s: pd.to_datetime(s, utc=True, errors="coerce")
-    converters = {c: utc_conv for c in TIME_COLS}
-    return pd.read_csv(path, converters=converters)
+_FLOAT32_MARKET_COLS = {
+    "liquidityNum",
+    "volumeNum",
+    "prob_yes",
+    "prob_no",
+    "lastTradePrice",
+    "bestBid",
+    "bestAsk",
+}
+
+
+def read_markets_csv(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
+    """Load markets CSV quickly while keeping timestamp columns in UTC."""
+    df = pd.read_csv(
+        path,
+        usecols=columns,
+        low_memory=False,
+        memory_map=True,
+    )
+
+    for col in TIME_COLS:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], utc=True, errors="coerce")
+
+    for col in _FLOAT32_MARKET_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float32")
+
+    return df
 
 
 def compute_market_apy_series(

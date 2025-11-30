@@ -336,6 +336,56 @@ def find_tailend_markets(markets: pd.DataFrame,
     return pd.DataFrame(tailend_markets)
 
 
+def _get_market_outcome_token(market: pd.Series) -> Optional[str]:
+    """Return 'yes' or 'no' based on the resolved market probabilities."""
+    yes = (float(market.get("prob_yes")))
+    no = (float(market.get("prob_no")))
+    winner = closer_to_one(yes, no)
+    return "yes" if winner == yes else "no"
+
+
+def find_tailend_markets_by_merged_prices(
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+    threshold: float = TAILEND_PERCENT,
+    percent: float = TAILEND_RATE,
+) -> pd.DataFrame:
+    """Same as find_tailend_markets but works with merged price files that include tokens."""
+    markets = markets.copy()
+    markets["id"] = pd.to_numeric(markets["id"], errors="coerce").astype("Int64")
+    markets_idx = markets.set_index("id")
+
+    prices = prices.copy()
+    prices["market_id"] = pd.to_numeric(prices["market_id"], errors="coerce").astype("Int64")
+    prices["p"] = pd.to_numeric(prices["p"], errors="coerce")
+    prices = prices.dropna(subset=["market_id", "p", "token"])
+    prices["token"] = prices["token"].str.lower().str.strip()
+
+    tailend_rows: List[pd.Series] = []
+
+    for market_id, market_prices in prices.groupby("market_id"):
+        if market_id not in markets_idx.index:
+            continue
+        market = markets_idx.loc[market_id]
+        resolved_token = _get_market_outcome_token(market)
+        if resolved_token is None:
+            continue
+
+        for token_value, token_prices in market_prices.groupby("token"):
+            if token_prices.empty or not is_prices_above_then(token_prices, threshold, percent):
+                continue
+
+            row = market.copy()
+            row["tailend_label"] = "winner" if token_value == resolved_token else "loser"
+            row["tailend_token"] = token_value
+            tailend_rows.append(row)
+
+    if not tailend_rows:
+        raise Exception("NO Tail-end CHECK arguments")
+
+    return pd.DataFrame(tailend_rows)
+
+
 def find_markets_without_prices(
     markets: pd.DataFrame,
     prices: pd.DataFrame,
@@ -389,10 +439,16 @@ def create_lossers_csv(markets: pd.DataFrame, prices: pd.DataFrame) -> None:
 
 if __name__ == "__main__":
     
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/binary_markets.csv')
+    
+    markets = pd.read_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
+    prices = pd.read_csv((f'{PROJECT_ROOT}/data/prices_binary_all.csv')) 
     normalized = normalize_time(markets)
-    normalized.to_csv(Path('data/binary_normalized.csv'), index=False) 
+    normalized.to_csv(Path('data/categorical_markets_all.csv'), index=False) 
    
+   #markets.to_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
+#    tailend = find_tailend_markets_by_merged_prices(markets, prices)
+ #   tailend.to_csv(f'{PROJECT_ROOT}/data/tailendtest.csv')
+    sys.exit(0)
     prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
     #create_lossers_csv(markets, prices)
     #markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
