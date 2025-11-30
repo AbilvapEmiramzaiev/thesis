@@ -353,7 +353,9 @@ def find_tailend_markets_by_merged_prices(
     """Same as find_tailend_markets but works with merged price files that include tokens."""
     markets = markets.copy()
     markets["id"] = pd.to_numeric(markets["id"], errors="coerce").astype("Int64")
-    markets_idx = markets.set_index("id")
+    markets_lookup: Dict[int, pd.Series] = {}
+    for _, row in markets.dropna(subset=["id"]).iterrows():
+        markets_lookup[int(row["id"])] = row
 
     prices = prices.copy()
     prices["market_id"] = pd.to_numeric(prices["market_id"], errors="coerce").astype("Int64")
@@ -364,9 +366,11 @@ def find_tailend_markets_by_merged_prices(
     tailend_rows: List[pd.Series] = []
 
     for market_id, market_prices in prices.groupby("market_id"):
-        if market_id not in markets_idx.index:
+        if pd.isna(market_id):
             continue
-        market = markets_idx.loc[market_id]
+        market = markets_lookup.get(int(market_id))
+        if market is None:
+            continue
         resolved_token = _get_market_outcome_token(market)
         if resolved_token is None:
             continue
@@ -436,20 +440,44 @@ def create_lossers_csv(markets: pd.DataFrame, prices: pd.DataFrame) -> None:
     wrong_tail_end.to_csv(f'{PROJECT_ROOT}/data/losser_binary_markets.csv', index=False)
     losser_prices.to_csv(f'{PROJECT_ROOT}/data/losser_binary_markets_prices.csv', index=False)
 
+def find_tailend_prices(markets, prices):
+    markets = markets.copy()
+    prices = prices.copy()
+
+    markets["id"] = pd.to_numeric(markets["id"], errors="coerce").astype("Int64")
+    markets = markets.dropna(subset=["id", "tailend_token"])
+    markets["tailend_token"] = markets["tailend_token"].astype(str).str.lower().str.strip()
+
+    prices["market_id"] = pd.to_numeric(prices["market_id"], errors="coerce").astype("Int64")
+    prices["token"] = prices["token"].astype(str).str.lower().str.strip()
+
+    merged = prices.merge(
+        markets[["id", "tailend_token", "tailend_label"]],
+        left_on=["market_id", "token"],
+        right_on=["id", "tailend_token"],
+        how="inner",
+    )
+
+    ordered_cols = list(prices.columns) + ["tailend_label", "tailend_token"]
+    return merged[ordered_cols]
+
 
 if __name__ == "__main__":
     
     
-    markets = pd.read_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
-    prices = pd.read_csv((f'{PROJECT_ROOT}/data/prices_binary_all.csv')) 
-    normalized = normalize_time(markets)
-    normalized.to_csv(Path('data/categorical_markets_all.csv'), index=False) 
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_markets.csv')
+    prices = read_prices_csv((f'{PROJECT_ROOT}/data/test_prices.csv')) 
    
-   #markets.to_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
-#    tailend = find_tailend_markets_by_merged_prices(markets, prices)
- #   tailend.to_csv(f'{PROJECT_ROOT}/data/tailendtest.csv')
+  #  normalized = normalize_time(markets)
+   # normalized.to_csv(Path('data/categorical_markets_all.csv'), index=False) 
+   # markets.to_csv(f'{PROJECT_ROOT}/data/binary_markets.csv', index=False)
+    tailend = find_tailend_markets_by_merged_prices(markets, prices)
+    tailend_prices = find_tailend_prices(tailend, prices)
+    graphic_apy_aggregated(tailend, tailend_prices)
+    
+    #tailend.to_csv(f'{PROJECT_ROOT}/data/tailendtest.csv', index=False)
     sys.exit(0)
-    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv')
+    prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices.csv', index=False)
     #create_lossers_csv(markets, prices)
     #markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical.csv')
     #prices = pd.read_csv(f'{PROJECT_ROOT}/data/market_prices_categorical.csv')
