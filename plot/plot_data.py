@@ -1,4 +1,6 @@
 from imports import *
+from typing import Iterable, Literal,Union, Dict, Tuple, List, Optional, Any, Callable, Mapping
+
 
 def plot_market_history(prices: pd.DataFrame):
     x_utc = pd.to_datetime(prices['t'], unit='s', utc=True)
@@ -47,7 +49,7 @@ def add_market_apy_line(
     label: str = "APY",
     linewidth: int = 2,
     alpha: float = 0.9,
-    ax2: Optional[plt.Axes] = None,
+    ax2: plt.Axes | None,
 ):
     
     t = pd.to_datetime(prices[ts_col], unit="s", utc=True)
@@ -149,7 +151,7 @@ def plot_prices(
     df: pd.DataFrame,
     *,
     show: bool = True,
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None,
 ) -> plt.Axes:
     time_col = "t"
     market_col = "market_id"

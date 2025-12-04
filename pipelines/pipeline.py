@@ -10,6 +10,87 @@ from imports import *
 from fetch.tail_end_func import *
 
 
+def collect_market_trades(
+    markets: pd.DataFrame,
+    *,
+    out_path: Path | None = None,
+    cicle: bool = False,
+    end: int = -1,
+) -> pd.DataFrame:
+    """
+    Fetch trade history for both YES/NO clob token ids for every market row.
+
+    Parameters mirror fetch_trades allowing optional CSV streaming.
+    """
+    if markets.empty:
+        return pd.DataFrame(columns=["market_id", "token", "ts", "price", "outcome", "side", "size"])
+
+    markets = markets.copy()
+    markets["id"] = pd.to_numeric(markets["id"], errors="coerce").astype("Int64")
+    markets = markets.dropna(subset=["id", "clobTokenIdYes", "clobTokenIdNo"])
+
+    if out_path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    header_written = bool(out_path and out_path.exists() and out_path.stat().st_size > 0)
+
+    records: List[pd.DataFrame] = []
+    for _, market in markets.iterrows():
+        market_id = int(market["id"])
+        for token_label, clob_id in (
+            ("yes", market.get("clobTokenIdYes")),
+            ("no", market.get("clobTokenIdNo")),
+        ):
+            if not clob_id or pd.isna(clob_id):
+                continue
+            try:
+                trades = fetch_trades(str(clob_id), cicle=cicle, end=end)
+            except Exception as exc:
+                print(f"Failed to fetch trades for market {market_id} ({token_label}): {exc}", file=sys.stderr)
+                continue
+
+            if trades.empty:
+                continue
+
+            df = trades.copy()
+            df["market_id"] = market_id
+            df["token"] = token_label
+            df
+
+            if out_path:
+                df.to_csv(out_path, mode="a", header=not header_written, index=False)
+                header_written = True
+            else:
+                records.append(df)
+
+    if records:
+        return pd.concat(records, ignore_index=True)
+
+    return pd.DataFrame(columns=["market_id", "token", "ts", "price", "outcome", "side", "size"])
+
+
+def stream_market_trades_to_csv(
+    markets_path: Path,
+    out_path: Path,
+    *,
+    chunk_size: int = 500,
+    cicle: bool = False,
+    end: int = -1,
+) -> None:
+    """
+    Chunked streaming helper similar to stream_markets_to_csv but for trades.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    total = 0
+    for chunk in pd.read_csv(markets_path, chunksize=chunk_size):
+        if chunk.empty:
+            continue
+        collect_market_trades(chunk, out_path=out_path, cicle=cicle, end=end)
+        total += len(chunk)
+        print(f"Processed {total} markets for trades…")
+
+    print(f"Finished collecting trades to {out_path}")
+
+
 def collect_market_prices(
     markets: pd.DataFrame,
     out_path:Path,
@@ -195,6 +276,24 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         action="store_true",
         help="Fetch price history for the cached markets CSV and write to --output",
     )
+    parser.add_argument(
+        "--fetch-trades",
+        dest="fetch_trades",
+        action="store_true",
+        help="Fetch trade history for cached markets and append to --trades-output",
+    )
+    parser.add_argument(
+        "--trades-output",
+        type=Path,
+        default=Path("data/market_trades.csv"),
+        help="CSV path for cached trades",
+    )
+    parser.add_argument(
+        "--trade-chunk-size",
+        type=int,
+        default=500,
+        help="Number of markets to load per chunk when fetching trades",
+    )
     return parser.parse_args(argv)
 
 
@@ -212,6 +311,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             out_path=args.output,
         )
         print(f"Finished writing prices to {args.output}")
+
+    if args.fetch_trades:
+        print("Collecting trades for cached markets…")
+        stream_market_trades_to_csv(
+            Path('data/tailendtest.csv'),
+            args.trades_output,
+            chunk_size=args.trade_chunk_size,
+        )
+        print(f"Finished writing trades to {args.trades_output}")
 
     if(args.fetch_binary_markets):
         stream_markets_to_csv(limit=args.limit, page_size=args.page_size, offset=args.offset)

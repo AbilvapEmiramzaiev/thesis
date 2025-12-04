@@ -3,6 +3,9 @@ import pandas as pd
 from pathlib import Path
 import json
 from config import *
+from fetch.tail_end_func import YES_INDEX, NO_INDEX, find_tailend_markets_by_merged_prices,find_tailend_prices
+
+
 def ts_to_utc(ts: int) -> None:
     return datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -83,11 +86,10 @@ _FLOAT32_MARKET_COLS = {
 }
 
 
-def read_markets_csv(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
+def read_markets_csv(path: Path) -> pd.DataFrame:
     """Load markets CSV quickly while keeping timestamp columns in UTC."""
     df = pd.read_csv(
         path,
-        usecols=columns,
         low_memory=False,
         memory_map=True,
     )
@@ -142,3 +144,12 @@ def compute_market_apy_series(
 def df_time_to_datetime(df, column):
     df[column] = pd.to_datetime(df[column], unit='s', utc=True,  errors="coerce")
     return df
+
+def get_ready_tailend_data(marketsPath, pricesPath):
+    #boilerplate reader and parser
+    markets = read_markets_csv(marketsPath)
+    prices = read_prices_csv(pricesPath) 
+    tailend = find_tailend_markets_by_merged_prices(markets, prices)
+    tailend_prices = find_tailend_prices(tailend, prices)
+    return tailend, tailend_prices
+    

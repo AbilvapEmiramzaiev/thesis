@@ -8,6 +8,7 @@ if __package__ in (None, ""):
 from imports import *
 from plot.plot_data import *
 from plot.graphics import *
+from fetch.filtering import *
 
 def fetch_markets(
     size: int = 0,
@@ -252,7 +253,7 @@ def fetch_trades(market_id: str, cicle: bool = False, end: int = -1) -> pd.DataF
     df["ts"] = pd.to_datetime(df["timestamp"], unit='s', utc=True, errors="coerce")
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df = df.sort_values("ts").reset_index(drop=True)
-    return df[["ts", "price", "outcome", "side", "size"]]
+    return df
 
 def fetch_market_prices_history(startDate: str, clobTokenId: str, fidelity: int = 1440, startTs: int = False) -> pd.DataFrame:
     """Fetches historical market prices from Polymarket Data API. 1440 = daily"""

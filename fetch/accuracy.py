@@ -241,12 +241,16 @@ def speed_metrics(second_bars):
     }
 
 def accuracy_all_markets(
-    marketPath=f'{PROJECT_ROOT}/data/test_pipeline.csv',
-    pricesPath=f'{PROJECT_ROOT}/data/binary_yes_prices.csv'
+    markets: pd.DataFrame,
+    prices: pd.DataFrame,
+    title: str = "Calibration plot (Reliability curve)",
+    days_before: int = DAYS_BEFORE,
+    #marketPath=f'{PROJECT_ROOT}/data/test_pipeline.csv',
+    #pricesPath=f'{PROJECT_ROOT}/data/binary_yes_prices.csv'
 ):
-    markets = read_markets_csv(marketPath)
+    #markets = read_markets_csv(marketPath)
     marketsForResolution = filter_by_duration(markets, DAYS_BEFORE)
-    prices = pd.read_csv(pricesPath)
+    #prices = pd.read_csv(pricesPath)
     prices["t"] = pd.to_datetime(prices["t"],unit="s", utc=True)
     withOutcome = prices.merge(
         marketsForResolution[['id', 'prob_yes', 't_resolve']],
@@ -260,24 +264,24 @@ def accuracy_all_markets(
     n_true = int(grouped_outcomes.sum())
     n_false = int(len(grouped_outcomes) - n_true)
   
-    metrics_all = evaluate_markets_bucketed(withOutcome)
+    metrics_all = evaluate_markets_bucketed(withOutcome, days_before=days_before)
     
-    #metrics_1w = evaluate_markets_bucketed(withOutcome, days_before=7)
-    #metrics_1m = evaluate_markets_bucketed(withOutcome,days_before=30)
-    #metrics_3m = evaluate_markets_bucketed(withOutcome,days_before=90)
+    metrics_1w = evaluate_markets_bucketed(withOutcome, days_before=7)
+    metrics_1m = evaluate_markets_bucketed(withOutcome,days_before=30)
+    metrics_3m = evaluate_markets_bucketed(withOutcome,days_before=90)
 
     legend_extra = f"yes={n_true}, no={n_false}\n days before resolution = {DAYS_BEFORE}"
     fig, ax = plt.subplots()
     # TODO: One line case
-    plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', count_col='n', legend_extra=legend_extra)
+    #plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', count_col='n', legend_extra=legend_extra)
     
     #TODO: different lines case
-    #plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', label=f'martkets 1day')
-    #plot_calibration_line(ax, metrics_1w, 'mean_pred', 'freq_pos', label=f'martkets 1week')
-    #plot_calibration_line(ax, metrics_1m, 'mean_pred', 'freq_pos', label=f'martkets 1month')
-    #plot_calibration_line(ax, metrics_3m, 'mean_pred', 'freq_pos', label=f'martkets 3month')
+    plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', label=f'martkets 1day')
+    plot_calibration_line(ax, metrics_1w, 'mean_pred', 'freq_pos', label=f'martkets 1week')
+    plot_calibration_line(ax, metrics_1m, 'mean_pred', 'freq_pos', label=f'martkets 1month')
+    plot_calibration_line(ax, metrics_3m, 'mean_pred', 'freq_pos', label=f'martkets 3month')
 
-    graphic_calibration(ax)
+    graphic_calibration(ax, title=title)
     print(metrics_all)
 
 def accuracy_relative_brier():
@@ -310,17 +314,54 @@ def accuracy_relative_brier():
     print(relative_brier(all_prices, tailended, 14)['relative_brier'].mean())
 
 
+def accuracy_low_apy():
+    markets_b = read_markets_csv(f'{PROJECT_ROOT}/data/binary_markets.csv')
+    prices_b = read_prices_csv(f'{PROJECT_ROOT}/data/prices_binary_all.csv')
+    markets_c = read_markets_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
+    prices_c = read_prices_csv((f'{PROJECT_ROOT}/data/prices_categorical_all.csv')) 
+    markets = pd.concat([markets_b, markets_c], ignore_index=True)   
+    prices = pd.concat([prices_b, prices_c], ignore_index=True)   
+    prices= prices[prices['token'] == 'yes']
+    low_api = 0.2
+    finished_markets = markets[markets['closed'] == True]
+    low_apy_markets = filter_by_avg_apy(
+        finished_markets,
+        prices,
+        min_days_before_res=5.0,
+        max_apy=low_api
+    )
+    low_apy_markets.to_csv('text.csv')
+    print(f"Low APY markets count: {len(low_apy_markets)}")
+    low_apy_prices = prices[ prices['market_id'].isin( pd.to_numeric(low_apy_markets['id'], errors="coerce").astype("Int64").dropna().unique() ) ]
+    accuracy_all_markets(low_apy_markets, low_apy_prices, title=f"Calibration plot for low APY markets {low_api*100:.0f}%", days_before=3)
+    #metrics_low_apy = evaluate_markets_bucketed(
+    #    low_apy_prices,
+    #    outcome_col='outcome'
+    #)
+
     
 
 if __name__ == "__main__":
    
-    accuracy_all_markets(
-     #   f'{PROJECT_ROOT}/data/categorical.csv',
-     #   f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
-    ) 
+    mode = 2
+    markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
+    prices = read_prices_csv((f'{PROJECT_ROOT}/data/prices_categorical_all.csv')) 
+    
+    if mode == 1:
+        accuracy_low_apy()
+    if mode == 2:
+        #markets = find_tailend_markets_by_merged_prices(markets, prices)
+        prices = prices[prices['token'] == 'yes']
+    # prices = find_tailend_prices(markets, prices)
+        accuracy_all_markets(
+            markets, prices
+        #   f'{PROJECT_ROOT}/data/categorical.csv',
+        #   f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
+        ) 
     #accuracy_relative_brier()
-
+    
     sys.exit(0)
+
     # Evaluate losers subset
     loser_ids = pd.to_numeric(markets_lossers.get("id", pd.Series(dtype="Int64")), errors="coerce").astype("Int64")
     prices_losers = all_prices[ pd.to_numeric(all_prices["market_id"], errors="coerce").astype("Int64").isin(pd.unique(loser_ids.dropna())) ]
