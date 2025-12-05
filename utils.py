@@ -153,3 +153,90 @@ def get_ready_tailend_data(marketsPath, pricesPath):
     tailend_prices = find_tailend_prices(tailend, prices)
     return tailend, tailend_prices
     
+
+def write_short_duration_blacklist(
+    binary_path: Path | str = PROJECT_ROOT / "data/binary_markets.csv",
+    categorical_path: Path | str = PROJECT_ROOT / "data/categorical_markets_all.csv",
+    output_path: Path | str = PROJECT_ROOT / "data/markets_blacklist.csv",
+    max_hours: float = 24.0,
+    *,
+    price_paths: Optional[List[Path | str]] = None,
+    include_constant_price: bool = True,
+    constant_price_value: float = 0.5,
+) -> Path:
+    """
+    Build a blacklist of market IDs that should be ignored in downstream analysis.
+
+    Parameters
+    ----------
+    binary_path : Path | str
+        CSV with binary markets (must have startDate/endDate columns).
+    categorical_path : Path | str
+        CSV with categorical markets.
+    output_path : Path | str
+        Where the blacklist CSV should be written.
+    max_hours : float
+        Duration threshold; markets with end-start < threshold are blacklisted.
+    price_paths : list[Path | str] | None
+        Additional merged price CSVs to scan for constant-price markets.
+    include_constant_price : bool
+        If True, markets whose prices stay exactly at `constant_price_value`
+        are also added to the blacklist.
+    constant_price_value : float
+        Price value to test for when `include_constant_price` is enabled.
+    """
+    market_sources = [Path(binary_path), Path(categorical_path)]
+    cutoff_seconds = max_hours * 3600.0
+    blacklist_ids: set[int] = set()
+
+    for path in market_sources:
+        if not path.exists():
+            raise FileNotFoundError(f"Market CSV not found: {path}")
+
+        df = read_markets_csv(path)
+        start = pd.to_datetime(df["startDate"], utc=True, errors="coerce")
+        end = pd.to_datetime(df["endDate"], utc=True, errors="coerce")
+        duration = (end - start).dt.total_seconds()
+        mask = duration < cutoff_seconds
+        ids = pd.to_numeric(df.loc[mask, "id"], errors="coerce").dropna()
+        if not ids.empty:
+            blacklist_ids.update(int(v) for v in ids.tolist())
+
+    if include_constant_price:
+        price_sources = price_paths
+        if not price_sources:
+            price_sources = [
+                PROJECT_ROOT / "data/prices_binary_all.csv",
+                PROJECT_ROOT / "data/prices_categorical_all.csv",
+            ]
+
+        for price_path in price_sources:
+            price_path = Path(price_path)
+            if not price_path.exists():
+                continue
+
+            prices = read_prices_csv(price_path)
+            if prices.empty:
+                continue
+            agg = (
+                prices.groupby("market_id")["p"]
+                .agg(["min", "max"])
+                .reset_index()
+            )
+            matches = agg[
+                (agg["min"] == constant_price_value)
+                & (agg["max"] == constant_price_value)
+            ]["market_id"]
+            blacklist_ids.update(int(v) for v in matches.dropna().tolist())
+
+    if not blacklist_ids:
+        raise ValueError("No markets matched the blacklist criteria.")
+
+    combined = (
+        pd.Series(sorted(blacklist_ids), dtype="Int64", name="id")
+    )
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_frame().to_csv(output_path, index=False)
+    return output_path

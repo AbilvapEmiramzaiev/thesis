@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -171,3 +171,52 @@ def plot_volatility_distribution(
     ax.grid(True, axis="y", linestyle="--", alpha=0.3)
     fig.tight_layout()
     return fig
+
+
+def main() -> None:
+    from config import PROJECT_ROOT
+    from utils import read_markets_csv, read_prices_csv
+    WINDOW = 10
+    markets_b = read_markets_csv(PROJECT_ROOT / "data/binary_markets.csv")
+    markets_c = read_markets_csv(PROJECT_ROOT / "data/categorical_markets_all.csv")
+    prices_b = read_prices_csv(PROJECT_ROOT / "data/prices_binary_all.csv")
+    prices_c = read_prices_csv(PROJECT_ROOT / "data/prices_categorical_all.csv")
+
+    markets = pd.concat([markets_b, markets_c], ignore_index=True)
+    prices = pd.concat([prices_b, prices_c], ignore_index=True)
+    from fetch.tail_end_func import find_tailend_markets_by_merged_prices;
+    markets = find_tailend_markets_by_merged_prices(markets, prices)
+    markets.to_csv("tailend_markets.csv", index=False)
+    returns = compute_log_returns(prices)
+    rolling = compute_rolling_volatility(returns, window=WINDOW, annualize=True, freq_per_year=365)
+
+    avg_vol = (
+        rolling.groupby("market_id")["rolling_vol"]
+        .mean()
+        .reset_index()
+        .rename(columns={"rolling_vol": "avg_volatility"})
+    )
+    merged = avg_vol.merge(
+        markets[["id", "question"]],
+        left_on="market_id",
+        right_on="id",
+        how="left",
+    )
+    merged = merged.sort_values("avg_volatility")
+    merged = merged[merged["avg_volatility"] > 0]
+    merged.to_csv("volatility_summary.csv", index=False)
+    print(f"Computed average rolling volatility for {len(merged)} markets.")
+    print(merged.head())
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.hist(merged["avg_volatility"], bins=60, color="#1f77b4", alpha=0.75)
+    ax.set_xlabel(f"Average volatility (rolling window={WINDOW})")
+    ax.set_ylabel("Markets")
+    ax.set_title("Distribution of average volatility")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()

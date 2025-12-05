@@ -465,14 +465,17 @@ def find_tailend_prices(markets, prices):
 
 if __name__ == "__main__":
     
-    
+    #write_short_duration_blacklist()
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_markets.csv')
     prices = read_prices_csv((f'{PROJECT_ROOT}/data/test_prices.csv')) 
-   
+   #pricesOld = pd.read_csv((f'{PROJECT_ROOT}/backup/market_prices.csv'))
   #  normalized = normalize_time(markets)
    # normalized.to_csv(Path('data/categorical_markets_all.csv'), index=False) 
    # markets.to_csv(f'{PROJECT_ROOT}/data/binary_markets.csv', index=False)
     tailend = find_tailend_markets_by_merged_prices(markets, prices)
+    tailend.to_csv(f'{PROJECT_ROOT}/data/tailend_markets_by_merged_prices.csv', index=False)
+    tailendOld = find_tailend_markets(markets, pricesOld)
+    tailendOld.to_csv(f'{PROJECT_ROOT}/data/tailend_markets_old.csv', index=False)
     tailend_prices = find_tailend_prices(tailend, prices)
     graphic_apy_aggregated(tailend, tailend_prices)
     

@@ -1,7 +1,8 @@
 from imports import *
 from plot.plot_data import *
 import mplcursors
-
+from fetch.filtering import *
+from utils import *
 mind = 10
 maxd = 999
 amount = 0
