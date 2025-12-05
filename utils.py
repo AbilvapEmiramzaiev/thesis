@@ -166,24 +166,6 @@ def write_short_duration_blacklist(
 ) -> Path:
     """
     Build a blacklist of market IDs that should be ignored in downstream analysis.
-
-    Parameters
-    ----------
-    binary_path : Path | str
-        CSV with binary markets (must have startDate/endDate columns).
-    categorical_path : Path | str
-        CSV with categorical markets.
-    output_path : Path | str
-        Where the blacklist CSV should be written.
-    max_hours : float
-        Duration threshold; markets with end-start < threshold are blacklisted.
-    price_paths : list[Path | str] | None
-        Additional merged price CSVs to scan for constant-price markets.
-    include_constant_price : bool
-        If True, markets whose prices stay exactly at `constant_price_value`
-        are also added to the blacklist.
-    constant_price_value : float
-        Price value to test for when `include_constant_price` is enabled.
     """
     market_sources = [Path(binary_path), Path(categorical_path)]
     cutoff_seconds = max_hours * 3600.0
