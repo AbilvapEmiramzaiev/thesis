@@ -10,7 +10,7 @@ from plot.plot_data import *
 from plot.graphics import *
 from fetch.tail_end_func import find_tailend_markets
 
-DAYS_BEFORE = 1
+DAYS_BEFORE = 7
 
 def brier_score(probs: Iterable[float], labels: Iterable[int]) -> float:
     p = np.asarray(list(probs), dtype=float)
@@ -266,20 +266,20 @@ def accuracy_all_markets(
   
     metrics_all = evaluate_markets_bucketed(withOutcome, days_before=days_before)
     
-    metrics_1w = evaluate_markets_bucketed(withOutcome, days_before=7)
-    metrics_1m = evaluate_markets_bucketed(withOutcome,days_before=30)
-    metrics_3m = evaluate_markets_bucketed(withOutcome,days_before=90)
+   # metrics_1w = evaluate_markets_bucketed(withOutcome, days_before=7)
+   # metrics_1m = evaluate_markets_bucketed(withOutcome,days_before=30)
+   # metrics_3m = evaluate_markets_bucketed(withOutcome,days_before=90)
 
     legend_extra = f"yes={n_true}, no={n_false}\n days before resolution = {DAYS_BEFORE}"
     fig, ax = plt.subplots()
     # TODO: One line case
-    #plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', count_col='n', legend_extra=legend_extra)
+    plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', count_col='n', legend_extra=legend_extra)
     
     #TODO: different lines case
-    plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', label=f'martkets 1day')
-    plot_calibration_line(ax, metrics_1w, 'mean_pred', 'freq_pos', label=f'martkets 1week')
-    plot_calibration_line(ax, metrics_1m, 'mean_pred', 'freq_pos', label=f'martkets 1month')
-    plot_calibration_line(ax, metrics_3m, 'mean_pred', 'freq_pos', label=f'martkets 3month')
+    #plot_calibration_line(ax, metrics_all, 'mean_pred', 'freq_pos', label=f'martkets 1day')
+    #plot_calibration_line(ax, metrics_1w, 'mean_pred', 'freq_pos', label=f'martkets 1week')
+    #plot_calibration_line(ax, metrics_1m, 'mean_pred', 'freq_pos', label=f'martkets 1month')
+    #plot_calibration_line(ax, metrics_3m, 'mean_pred', 'freq_pos', label=f'martkets 3month')
 
     graphic_calibration(ax, title=title)
     print(metrics_all)
@@ -344,14 +344,22 @@ def accuracy_low_apy():
 if __name__ == "__main__":
    
     mode = 2
-    markets = read_markets_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
-    prices = read_prices_csv((f'{PROJECT_ROOT}/data/prices_categorical_all.csv')) 
-    
+    markets_b = read_markets_csv(PROJECT_ROOT / "data/binary_markets.csv")
+    markets_c = read_markets_csv(PROJECT_ROOT / "data/categorical_markets_all.csv")
+    prices_b = read_prices_csv(PROJECT_ROOT / "data/prices_binary_all.csv")
+    prices_c = read_prices_csv(PROJECT_ROOT / "data/prices_categorical_all.csv")
+
+    markets = pd.concat([markets_b, markets_c], ignore_index=True)
+    prices = pd.concat([prices_b, prices_c], ignore_index=True)
+   
     if mode == 1:
         accuracy_low_apy()
     if mode == 2:
-        #markets = find_tailend_markets_by_merged_prices(markets, prices)
+        markets = filter_by_duration(markets, 30)
+        markets = find_tailend_markets_by_merged_prices(markets, prices)
+        
         prices = prices[prices['token'] == 'yes']
+        markets.to_csv('accuracy.csv', index=False)
     # prices = find_tailend_prices(markets, prices)
         accuracy_all_markets(
             markets, prices

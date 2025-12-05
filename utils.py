@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 from config import *
 from fetch.tail_end_func import YES_INDEX, NO_INDEX, find_tailend_markets_by_merged_prices,find_tailend_prices
-
+from typing import Optional, List
 
 def ts_to_utc(ts: int) -> None:
     return datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
@@ -160,12 +160,13 @@ def write_short_duration_blacklist(
     output_path: Path | str = PROJECT_ROOT / "data/markets_blacklist.csv",
     max_hours: float = 24.0,
     *,
-    price_paths: Optional[List[Path | str]] = None,
+    price_paths: List[Path | str] | None,
     include_constant_price: bool = True,
     constant_price_value: float = 0.5,
 ) -> Path:
     """
     Build a blacklist of market IDs that should be ignored in downstream analysis.
+        Price value to test for when `include_constant_price` is enabled.
     """
     market_sources = [Path(binary_path), Path(categorical_path)]
     cutoff_seconds = max_hours * 3600.0
