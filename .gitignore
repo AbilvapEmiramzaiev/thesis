@@ -2,3 +2,4 @@ __pycache__/fetch_data.cpython-313.pyc
 __pycache__
 **/__pycache__/
 **/*.pyc
+data/market_trades.csv
