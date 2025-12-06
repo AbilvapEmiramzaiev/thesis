@@ -9,9 +9,10 @@ from imports import *
 from plot.plot_data import *
 from plot.graphics import *
 from fetch.tail_end_func import find_tailend_markets
+from fetch.filtering import _market_resolution_time
 
 DAYS_BEFORE = 7
-
+MIN_DURATION = 30
 def brier_score(probs: Iterable[float], labels: Iterable[int]) -> float:
     p = np.asarray(list(probs), dtype=float)
     y = np.asarray(list(labels), dtype=float)
@@ -249,17 +250,17 @@ def accuracy_all_markets(
     #pricesPath=f'{PROJECT_ROOT}/data/binary_yes_prices.csv'
 ):
     #markets = read_markets_csv(marketPath)
-    marketsForResolution = filter_by_duration(markets, DAYS_BEFORE)
+    #marketsForResolution = filter_by_duration(markets, DAYS_BEFORE)
     #prices = pd.read_csv(pricesPath)
     prices["t"] = pd.to_datetime(prices["t"],unit="s", utc=True)
     withOutcome = prices.merge(
-        marketsForResolution[['id', 'prob_yes', 't_resolve']],
+        markets[['id', 'prob_yes','prob_no', 't_resolve']],
         left_on='market_id',
         right_on='id'
     )
     withOutcome = withOutcome.rename(columns={"t_resolve": "resolve_time"})
     withOutcome["resolve_time"] = pd.to_datetime(withOutcome["resolve_time"], utc=True, errors="coerce")
-    withOutcome['outcome'] = (withOutcome['prob_yes'] == 1.0).astype(int)
+    withOutcome['outcome'] = (withOutcome['prob_yes'] >= 0.95).astype(int)
     grouped_outcomes = withOutcome.groupby('market_id')['outcome'].max()
     n_true = int(grouped_outcomes.sum())
     n_false = int(len(grouped_outcomes) - n_true)
@@ -283,6 +284,49 @@ def accuracy_all_markets(
 
     graphic_calibration(ax, title=title)
     print(metrics_all)
+
+
+def accuracy_tailend_markets(
+    tailend_markets: pd.DataFrame,
+    tailend_prices: pd.DataFrame,
+    title: str = "Tail-end calibration",
+    days_before: int = DAYS_BEFORE,
+) -> None:
+    """Calibration plot where correctness is derived from tailend_label."""
+    if tailend_markets.empty or tailend_prices.empty:
+        print("No tail-end markets/prices provided.")
+        return
+
+    # Keep resolved markets only
+    resolved = tailend_markets.copy()
+  #  if "t_resolve" not in resolved.columns:
+  #      resolved["t_resolve"] = resolved.apply(_market_resolution_time, axis=1)
+
+    prices = tailend_prices.copy()
+    prices = prices.drop(columns=["tailend_label"], errors="ignore")
+    prices["t"] = pd.to_datetime(prices["t"], unit="s", utc=True, errors="coerce")
+    merged = prices.merge(
+        resolved[["id", "tailend_label", "t_resolve"]],
+        left_on="market_id",
+        right_on="id",
+        how="inner",
+    )
+    merged = merged.rename(columns={"t_resolve": "resolve_time"})
+    merged["resolve_time"] = pd.to_datetime(merged["resolve_time"], utc=True, errors="coerce")
+    merged["outcome"] = (merged["tailend_label"] == "winner").astype(int)
+
+    grouped_outcomes = merged.groupby("market_id")["outcome"].max()
+    n_true = int(grouped_outcomes.sum())
+    n_false = int(len(grouped_outcomes) - n_true)
+    print('NTRUE, NFALSE', n_true, n_false)
+    metrics = evaluate_markets_bucketed(merged, days_before=days_before)
+    legend_extra = f"winner={n_true}, loser={n_false}\n days before resolution = {days_before}"
+    high_prob_count = int(metrics.loc[metrics["p_min"] >= 0.8, "n"].sum())
+    title_with_bucket = f"{title}\nBuckets 0.8-1.0 count={high_prob_count}"
+    fig, ax = plt.subplots()
+    plot_calibration_line(ax, metrics, "mean_pred", "freq_pos", count_col="n", legend_extra=legend_extra)
+    graphic_calibration(ax, title=title_with_bucket)
+    print(metrics)
 
 def accuracy_relative_brier():
     markets = read_markets_csv(f'{PROJECT_ROOT}/data/test_pipeline.csv')
@@ -314,7 +358,7 @@ def accuracy_relative_brier():
     print(relative_brier(all_prices, tailended, 14)['relative_brier'].mean())
 
 
-def accuracy_low_apy():
+def accuracy_low_apy(title: str = "Low APY markets calibration plot"):
     markets_b = read_markets_csv(f'{PROJECT_ROOT}/data/binary_markets.csv')
     prices_b = read_prices_csv(f'{PROJECT_ROOT}/data/prices_binary_all.csv')
     markets_c = read_markets_csv(f'{PROJECT_ROOT}/data/categorical_markets_all.csv')
@@ -330,10 +374,19 @@ def accuracy_low_apy():
         min_days_before_res=5.0,
         max_apy=low_api
     )
+    low_apy_markets = filter_by_duration(
+        low_apy_markets,
+        min_days=MIN_DURATION
+    )
     low_apy_markets.to_csv('text.csv')
     print(f"Low APY markets count: {len(low_apy_markets)}")
     low_apy_prices = prices[ prices['market_id'].isin( pd.to_numeric(low_apy_markets['id'], errors="coerce").astype("Int64").dropna().unique() ) ]
-    accuracy_all_markets(low_apy_markets, low_apy_prices, title=f"Calibration plot for low APY markets {low_api*100:.0f}%", days_before=3)
+    accuracy_all_markets(
+        low_apy_markets,
+        low_apy_prices,
+        title=f"Calibration plot for low APY {len(low_apy_markets)} markets, min duration {MIN_DURATION}d, days before res {DAYS_BEFORE}, low APY {low_api*100:.0f}%",
+        days_before=3
+    )
     #metrics_low_apy = evaluate_markets_bucketed(
     #    low_apy_prices,
     #    outcome_col='outcome'
@@ -343,29 +396,48 @@ def accuracy_low_apy():
 
 if __name__ == "__main__":
    
-    mode = 2
+    mode = 1
     markets_b = read_markets_csv(PROJECT_ROOT / "data/binary_markets.csv")
     markets_c = read_markets_csv(PROJECT_ROOT / "data/categorical_markets_all.csv")
     prices_b = read_prices_csv(PROJECT_ROOT / "data/prices_binary_all.csv")
     prices_c = read_prices_csv(PROJECT_ROOT / "data/prices_categorical_all.csv")
-
+    MIN_DURATION = 30
     markets = pd.concat([markets_b, markets_c], ignore_index=True)
     prices = pd.concat([prices_b, prices_c], ignore_index=True)
-   
+    markets = markets[markets['closed'] == True]
     if mode == 1:
         accuracy_low_apy()
-    if mode == 2:
+    if mode == 2:#tailend
+        #get tailend prices if yes always around 90 and a winner then this is a correct prediction
+        markets = filter_by_duration(markets, MIN_DURATION)
+        markets = find_tailend_markets_by_merged_prices(markets, prices)
+        prices = find_tailend_prices(markets, prices)
+        markets.to_csv('accuracy.csv', index=False)
+        prices.to_csv('accuracy_prices.csv')
+        #print(f"Tail-end markets count: {markets['tailend_label'].notna().sum()}")
+        print(f"Losers: {markets[markets['tailend_label'] == 'loser'].shape[0]}")
+        accuracy_tailend_markets(
+            markets, prices,
+            title = f"Calibration plot (Reliability curve) for {len(markets)} tail-end markets. Looking on YES/NO tokens",
+        ) 
+    if mode == 3:
         markets = filter_by_duration(markets, 30)
         markets = find_tailend_markets_by_merged_prices(markets, prices)
-        
-        prices = prices[prices['token'] == 'yes']
-        markets.to_csv('accuracy.csv', index=False)
-    # prices = find_tailend_prices(markets, prices)
+        markets = markets[markets['tailend_token'] == 'yes']
+        prices = prices[prices['token'] == 'yes']   #non tailend
+        markets.to_csv('accuracy_no.csv', index=False)
+        prices = prices.merge(
+            markets[["id", "tailend_label"]],
+            left_on="market_id",
+            right_on="id",
+            how="inner",
+        )
+        prices.to_csv('accuracy_prices_no.csv', index=False)
         accuracy_all_markets(
-            markets, prices
-        #   f'{PROJECT_ROOT}/data/categorical.csv',
-        #   f'{PROJECT_ROOT}/data/categorical_yes_prices.csv'
-        ) 
+            markets,
+            prices,
+            title = f"Calibration plot (Reliability curve) for {len(markets)} tail-end markets. Looking on YES token",
+        )
     #accuracy_relative_brier()
     
     sys.exit(0)
