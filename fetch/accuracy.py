@@ -396,7 +396,7 @@ def accuracy_low_apy(title: str = "Low APY markets calibration plot"):
 
 if __name__ == "__main__":
    
-    mode = 1
+    mode = 2
     markets_b = read_markets_csv(PROJECT_ROOT / "data/binary_markets.csv")
     markets_c = read_markets_csv(PROJECT_ROOT / "data/categorical_markets_all.csv")
     prices_b = read_prices_csv(PROJECT_ROOT / "data/prices_binary_all.csv")
@@ -409,7 +409,7 @@ if __name__ == "__main__":
         accuracy_low_apy()
     if mode == 2:#tailend
         #get tailend prices if yes always around 90 and a winner then this is a correct prediction
-        markets = filter_by_duration(markets, MIN_DURATION)
+        markets = filter_by_duration(markets, 90)
         markets = find_tailend_markets_by_merged_prices(markets, prices)
         prices = find_tailend_prices(markets, prices)
         markets.to_csv('accuracy.csv', index=False)
@@ -418,6 +418,7 @@ if __name__ == "__main__":
         print(f"Losers: {markets[markets['tailend_label'] == 'loser'].shape[0]}")
         accuracy_tailend_markets(
             markets, prices,
+            days_before=90,
             title = f"Calibration plot (Reliability curve) for {len(markets)} tail-end markets. Looking on YES/NO tokens",
         ) 
     if mode == 3:
