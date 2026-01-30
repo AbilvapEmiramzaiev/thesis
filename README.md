@@ -10,14 +10,13 @@ This thesis explores whether **leverage** can counter those frictions. The premi
 - Deepen order books and liquidity pools,  
 - Improve calibration of probabilities,  
 
-all **without introducing excessive liquidation risk or bad debt**:contentReference[oaicite:0]{index=0}:contentReference[oaicite:1]{index=1}.
+all **without introducing excessive liquidation risk or bad debt**.
 
 ---
 
 ## Research Objectives
 
-We evaluate tail-end markets on Polymarket by measuring mispricing and participation patterns, then compare how leverage mechanisms (perps/futures, self-collateralized looping, and USD-backed reverse positions) affect capital efficiency, liquidity, and bad-debt risk, and finally test system stability under shocks by examining liquidation feasibility given latency and historical volatility spikes:contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}:contentReference[oaicite:4]{index=4}:contentReference[oaicite:5]{index=5}:contentReference[oaicite:6]{index=6}
-
+We evaluate tail-end markets on Polymarket by measuring mispricing and participation patterns, then compare how leverage mechanisms (perps/futures, self-collateralized looping, and USD-backed reverse positions) affect capital efficiency, liquidity, and bad-debt risk, and finally test system stability under shocks by examining liquidation feasibility given latency and historical volatility
 ---
 
 ## Methodology
