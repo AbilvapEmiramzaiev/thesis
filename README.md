@@ -17,7 +17,6 @@ all **without introducing excessive liquidation risk or bad debt**.
 ## Research Objectives
 
 We evaluate tail-end markets on Polymarket by measuring mispricing and participation patterns, then compare how leverage mechanisms (perps/futures, self-collateralized looping, and USD-backed reverse positions) affect capital efficiency, liquidity, and bad-debt risk, and finally test system stability under shocks by examining liquidation feasibility given latency and historical volatility
----
 
 ## Methodology
 
