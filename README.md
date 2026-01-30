@@ -16,34 +16,7 @@ all **without introducing excessive liquidation risk or bad debt**:contentRefere
 
 ## Research Objectives
 
-We evaluate tail-end markets, diagnose their mispricing and participation patterns, and assess the introduction of leverage across multiple mechanism designs.
-
-### RQ1: Pricing Inefficiency in Tail-End Events
-- **Question:** To what extent do tail-end markets in prediction platforms like Polymarket exhibit pricing inefficiencies or constant volume declines?  
-- **Approach:**  
-  - Quantify mispricing by comparing pre-resolution implied probabilities to actual outcomes.  
-  - Use calibration curves and Brier scores (usual, relative, ordinal).  
-  - Analyze profitability and liquidity patterns.  
-  - Show correlations between market volume and probability brackets:contentReference[oaicite:2]{index=2}.
-
-### RQ2: Comparative Analysis of Leverage Mechanisms
-- **Question:** How do different leverage mechanisms differ in efficiency, risk, and impact on tail-end pricing?  
-- **Mechanisms Studied:**  
-  A) **Perpetual/futures contracts** with market probability as spot  
-  B) **Self-collateralized lending** (looping against position tokens)  
-  C) **USD-backed reverse positions**  
-- **Focus:**  
-  - Capital efficiency  
-  - Liquidation dynamics  
-  - Bad debt risks  
-  - Practical impact on liquidity and mispricing:contentReference[oaicite:3]{index=3}:contentReference[oaicite:4]{index=4}  
-
-### RQ3: Stability, Cascades & Bad Debt
-- **Question:** How do prediction markets handle extreme price movements?  
-- **Focus:**  
-  - Liquidity and shock absorption (can large trades be absorbed without cascades?)  
-  - Liquidation feasibility given oracle latency, block time, gas constraints  
-  - Historical analysis of volatility spikes and whether liquidation would have been possible before debt accrual:contentReference[oaicite:5]{index=5}:contentReference[oaicite:6]{index=6}  
+We evaluate tail-end markets on Polymarket by measuring mispricing and participation patterns, then compare how leverage mechanisms (perps/futures, self-collateralized looping, and USD-backed reverse positions) affect capital efficiency, liquidity, and bad-debt risk, and finally test system stability under shocks by examining liquidation feasibility given latency and historical volatility spikes:contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}:contentReference[oaicite:4]{index=4}:contentReference[oaicite:5]{index=5}:contentReference[oaicite:6]{index=6}
 
 ---
 
@@ -57,5 +30,16 @@ The empirical work combines live-market data with counterfactual simulation:
 - **Flipr** – social and leverage layer on Polymarket  
 - **Research Reference:** *Improved Liquidity for Prediction Markets* by Lukas Kapp-Schwoerer:contentReference[oaicite:7]{index=7}
 
+Note: Python files with `liquidation` in the name contain liquidation-focused analysis and are being expanded.
+
 ---
 
+## Code Map
+
+- `pipelines/pipeline.py` – end-to-end data collection pipeline (markets, prices, trades) with CLI flags.
+- `fetch/tail_end_func.py` – API wrappers + tail-end market identification utilities.
+- `fetch/trades.py` – trade aggregation, trader behavior analysis, and plotting helpers.
+- `fetch/volatility.py` – volatility calculations, tail-end vs non-tail-end comparisons.
+- `fetch/liquidation.py` – liquidation analysis.
+
+---
